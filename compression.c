@@ -1,0 +1,1 @@
+// takes in a stream of raw timestamps, outputs a stream of compressed timestamps
