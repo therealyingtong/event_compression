@@ -24,7 +24,7 @@ OPTIONS:
 
 int main(int argc, char *argv[]){
 
-	int input, output; // in and out file descriptors
+	int input, output; // input and output file descriptors
 	char input_file[FNAMELENGTH] = "";
 	char output_file[FNAMELENGTH] = "";
 	int protocol_idx;
@@ -55,33 +55,30 @@ int main(int argc, char *argv[]){
 	struct protocol *protocol = &protocol_list[protocol_idx];
 	int bitmask = protocol->detector_entries - 1;
 
-	// initialise active_buffer and queue_buffer to parsed size
-	struct raw_event *active_buffer, *queue_buffer;
+	// initialise active_buffer and current_event to parsed size
+	struct raw_event *active_buffer;
     fd_set fd_poll;  /* for polling */
-    int ignorecount = DEFAULT_IGNORECOUNT; /* how many to ignore initially */
 
 	active_buffer = (struct raw_event *) malloc(INBUFENTRIES * sizeof(struct raw_event));
 	if (!active_buffer) exit(0);
 	char *active_pointer = (char *) active_buffer;
 	char *active_free_pointer;
 
-	queue_buffer = (struct raw_event *) malloc(INBUFENTRIES * sizeof(struct raw_event));
-	if (!queue_buffer) exit(0);
+	struct raw_event *current_event; //pointer to raw_event currently being read
 
-	int i1;
-	int inbytesread = 0, inelements = 0;
-	struct raw_event *inpointer, *inbuffer;
+	int bytes_leftover;
+	int bytes_read = 0, elements_read = 0;
 
 	// start adding raw events to active_buffer
 	while (1) {
 
-		/* rescue leftovers from previous read */
+		// /* rescue leftovers from previous read */
 
-		i1 =  inbytesread/sizeof(struct raw_event);
-		i1 *= sizeof(struct raw_event);
-		for (int i = 0 ; i<inbytesread - i1 ; i++) active_pointer[i] = active_pointer[i+i1];
-		i1 = inbytesread - i1;  /* leftover from last time */
-		active_free_pointer = &active_pointer[i1]; /* pointer to next free character */
+		// bytes_leftover =  bytes_read/sizeof(struct raw_event);
+		// bytes_leftover *= sizeof(struct raw_event);
+		// for (int i = 0 ; i<bytes_read - bytes_leftover ; i++) active_pointer[i] = active_pointer[i + bytes_leftover];
+		// bytes_leftover = bytes_read - bytes_leftover;  /* leftover from last time */
+		// active_free_pointer = &active_pointer[bytes_leftover]; /* pointer to next free character */
 
 		// wait for data on input
 
@@ -99,35 +96,34 @@ int main(int argc, char *argv[]){
 			break;
 		}
 
-		inbytesread = read(input, active_buffer, INBUFENTRIES*sizeof(struct raw_event)-i1);
-		if (!inbytesread) continue; /* wait for next event */
-		if (inbytesread == -1) {
+		bytes_read = read(input, active_buffer, INBUFENTRIES*sizeof(struct raw_event)-bytes_leftover);
+		if (!bytes_read) continue; /* wait for next event */
+		if (bytes_read == -1) {
 			fprintf(stderr,"error on read: %d\n",errno);
 			break;
 		}
 
-		inbytesread += i1; /* add leftovers from last time */
-		inelements = inbytesread/sizeof(struct raw_event);
-		inpointer = active_buffer;
+		bytes_read += bytes_leftover; /* add leftovers from last time */
+		elements_read = bytes_read/sizeof(struct raw_event);
+		current_event = active_buffer;
 
-		if (ignorecount) { /* dirty trick to eat away the first few events */
-			ignorecount--;
-			inpointer++;
-			continue;
-		}
 		do {
+			printf("bytes_read: %d\n", bytes_read);
 
-			printf("%d\n",inpointer->_clock_value);
+			printf("bytes_leftover %d\n", bytes_leftover);
+			printf("%p\n", &current_event);
+			printf("%d\n",current_event->_clock_value);
+			current_event++;
 
-		} while(--inelements);		
+		} while(--elements_read);		
 	}
 
 	// when active_buffer is full, call processor()
 
 		// when done processing active_buffer:
 		// - store value of active_buffer in tmp
-		// - set value of active_buffer to be queue_buffer
-		// - set value of queue_buffer to be tmp
+		// - set value of active_buffer to be current_event
+		// - set value of current_event to be tmp
 
 			// call processor()
 

@@ -13,7 +13,4 @@
 struct timeval timeout = {0,5}; /* timeout for input */
 #define RETRYREADWAIT 5 /* sleep time in usec after an empty read */
 
-#define DEFAULT_IGNORECOUNT 0 /* how many events to ignore initially */
-
-
 #endif
