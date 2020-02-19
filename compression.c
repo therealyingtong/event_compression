@@ -22,27 +22,45 @@ OPTIONS:
 
 */
 
+// global variables for I/O handling
+int input_fd, output_fd2, output_fd3; // input and output file descriptors
+unsigned int sendword2, sendword3; /* bit accumulators */
+int resbits2, resbits3; // how many bits are not used in the accumulator
+int type2datawidth, type3datawidth;
+int this_epoch_converted_entries; // for output buffers
+int detcnts[16], num_detectors = 4; /* detector counts */
+int protocol_idx;
+
+char type2_file[FNAMELENGTH] = "";
+char type3_file[FNAMELENGTH] = "";
+
 int main(int argc, char *argv[]){
 
-	int input, output; // input and output file descriptors
 	char input_file[FNAMELENGTH] = "";
-	char output_file[FNAMELENGTH] = "";
-	int protocol_idx;
+
+	int statemask = DEFAULT_STATEMASK; /* for result filtering */
+	int *type2patterntable, *type3patterntable; /* for protocol */
 
 	// parse options
 	int opt;
-	while((opt = getopt(argc, argv, "i:o:p:")) != EOF){
+	while((opt = getopt(argc, argv, "i:o2:o3:p:")) != EOF){
 		switch(opt){
 		case 'i':
 			sscanf(optarg, FNAMEFORMAT, input_file);
-			input = open(input_file, O_RDONLY|O_NONBLOCK);
-			if (input == -1) perror(errno);
+			input_fd = open(input_file, O_RDONLY|O_NONBLOCK);
+			if (input_fd == -1) perror(errno);
 			break;
 
-		case 'o':
-			sscanf(optarg, FNAMEFORMAT, output_file);
-			output = open(output_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
-			if (output == -1) perror(errno);
+		case 'o2': // outfile2 name and type
+			sscanf(optarg, FNAMEFORMAT, type2_file);
+			output_fd2 = open(type2_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
+			if (output_fd2 == -1) perror(errno);
+			break;
+
+	    case 'o3': /* outfile3 name and type */
+			sscanf(optarg, FNAMEFORMAT, type3_file);
+			output_fd3 = open(type3_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
+			if (output_fd3 == -1) perror(errno);
 			break;
 
 		case 'p':
@@ -55,7 +73,7 @@ int main(int argc, char *argv[]){
 	struct protocol *protocol = &protocol_list[protocol_idx];
 	int bitmask = protocol->detector_entries - 1;
 
-	// initialise active_buffer and current_event to parsed size
+	// initialise active_buffer and current_event 
 	struct raw_event *active_buffer;
     fd_set fd_poll;  /* for polling */
 
@@ -66,8 +84,37 @@ int main(int argc, char *argv[]){
 
 	struct raw_event *current_event; //pointer to raw_event currently being read
 
-	int bytes_leftover;
-	int bytes_read = 0, elements_read = 0;
+	int bytes_leftover, bytes_read, elements_read;
+
+	// initialise output buffers for type2 and type3 files
+	unsigned int *outbuf2, *outbuf3; // output buffer pointer
+	outbuf2=(unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
+    if (!outbuf2) return -emsg(18);
+	outbuf3=(unsigned int*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned int));
+    if (!outbuf3) return -emsg(19);
+
+	// prepare first epoch information
+	unsigned int t_epoch; // intermediate results
+
+	unsigned int old_epoch, t_fine_old;  /* storage for old epoch */
+    int epoch_init;
+	unsigned long long t_new, t_old; // for consistency checks
+
+	t_epoch = make_first_epoch(DEFAULT_FIRSTEPOCHDELAY);
+
+	this_epoch_converted_entries = 0;
+	for (int i=15; i; i--) detcnts[i]=0; /* clear histoogram */
+    old_epoch = t_epoch; 
+	open_epoch(t_epoch);
+
+    epoch_init = 0; /* mark first epoch... */
+    t_fine_old = 0;
+    /* prepare input buffer settings for first read */
+	bytes_read = 0;
+	elements_read = 0;
+	current_event = active_buffer;
+
+    t_old = 0;
 
 	// start adding raw events to active_buffer
 	while (1) {
@@ -108,11 +155,74 @@ int main(int argc, char *argv[]){
 		current_event = active_buffer;
 
 		do {
-			printf("bytes_read: %d\n", bytes_read);
+			// 0. read one value out of buffer
+			unsigned int clock_value, detector_value, t_state, t_fine;
 
+			clock_value = current_event->_clock_value;
+			detector_value = current_event -> _detector_value;
+
+			t_epoch = clock_value>>15; /* take most sig 17 bit of timer */
+			t_state = detector_value & statemask; /* get detector pattern */
+			t_fine = (clock_value <<17) | (detector_value >> 15); /* fine time unit */
+
+			// 1. consistency checks
+
+			// 1a) trap negative time differences
+		    t_new = (((unsigned long long) t_epoch)<<32) + t_fine; /* get event time */
+		    if (t_new < t_old ) { /* negative time difference */
+				if ((t_new-t_old) & 0x1000000000000ll) { /* check rollover */
+		    		current_event++;
+		    		continue; /* ...are ignored */
+				}
+				fprintf(stderr, "chopper: point 2, old: %llx, new: %llx\n", t_old,t_new);
+			}
+
+			t_old = t_new;
+
+			// 2. type-2 file filling
+			t_fine_old = 0;  /* storage for old epoch */
+			unsigned int t_diff; /* time difference for encoding */
+			unsigned int t1,t2;  /* intermediate variables for bit packing */
+			unsigned int t_diff_bitmask;  /* detecting exceptopn words */
+			int except_count= 0; // long diff exception counter
+			int type2bitwidth = DEFAULT_BITDEPTH; /* for time encoding */
+			int type2bitwidth_long = DEFAULT_BITDEPTH<<8; /* adaptive filtering */
+
+			int index2; // index in outbuf2
+
+			struct header_2 head2; /* keeps header for type 2 files */
+
+	    	t_diff = t_fine - t_fine_old; /* time difference */
+	    	t_fine_old = t_fine;
+
+			if (t_diff<2) { /* fudge unlikely events by 0.25 nsec */
+				t_fine+=2; t_diff+=2;
+			}
+
+			t_diff_bitmask = (1<<type2bitwidth) - 1; // for packing
+
+			if (t_diff != (t2 = (t_diff & t_diff_bitmask))) { /* long diff exception */
+				except_count++;
+				/* first batch is codeword zero plus a few bits from tdiff */
+				t1 = t_diff >> type2bitwidth;
+				/* save first part of this longers structure */
+				if (resbits2 == 32) {
+					outbuf2[index2++]=t1;
+				} else {
+					sendword2 |= (t1 >> (32-resbits2));
+					outbuf2[index2++]=sendword2;
+					sendword2 = t1 << resbits2;
+				}
+			}	
+
+			// insert compression here
+
+			printf("bytes_read: %d\n", bytes_read);
 			printf("bytes_leftover %d\n", bytes_leftover);
-			printf("%p\n", &current_event);
-			printf("%d\n",current_event->_clock_value);
+			printf("%p\n", (void *)current_event);
+			printf("clock value: %d\n", clock_value);
+			printf("detector value: %d\n", detector_value);
+
 			current_event++;
 
 		} while(--elements_read);		
