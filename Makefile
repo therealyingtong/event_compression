@@ -1,2 +1,2 @@
 all: compression.c
-	gcc -Wall -O3 -o compression compression.c -lm
+	gcc -w -O3 -o compression compression.c -lm

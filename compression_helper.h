@@ -5,6 +5,8 @@
 #include "compression_structs.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/time.h>
+#include <time.h>
 
 /* helper for name. adds a slash, hex file name and a termial 0 */
 char hexdigits[]="0123456789abcdef";
@@ -44,69 +46,42 @@ void fill_protocol_bit_tables(
 	num_detectors = &protocol_list[protocol_idx].num_detectors;
 }
 
-
-// takes in a stream of raw timestamps, outputs a stream of compressed timestamps
-int process(struct raw_event *buffer, int bitmask, struct raw_event *in_pointer){
-
-	// parse events in active_buffer
-	parse(buffer, bitmask, in_pointer);
-
-	// compress events in active_buffer
-	compress();
-
-	return 0;
+/* prepare first epoch information; should lead to a stale file in the past;
+   the argument is the delay from the current time in seconds */
+unsigned int make_first_epoch(int delay) {
+    unsigned long long aep;
+    aep = ((time(NULL)-delay)*1953125)>>20; /* time in epocs */
+    return (unsigned int) (aep & 0xffffffff);
 }
 
-int listen(){
-	// add raw events to queue_buffer
-	input_bytes = read(buffer, free_pointer, INBUFENTRIES * sizeof(struct raw_event));
+/* opening routine to target files & epoch construction */
+int open_epoch(
+	unsigned int t_epoch, 
+	struct header_2 *head2, 
+	struct header_3 *head3,
+	int type2bitwidth,
+	int type2datawidth,
+	int type3datawidth,
+	int protocol_idx) {
+		
+    unsigned int final_epoch = t_epoch;
 
-	return 0;
+    /* populate headers preliminary */
+
+    head2 -> tag = TYPE_2_TAG; 
+	head2 -> length = 0;
+    head2 -> time_order = type2bitwidth; 
+	head2 -> base_bits = type2datawidth;
+    head2 -> epoch = final_epoch;
+    head2 -> protocol = protocol_idx;
+
+    head3 -> tag = TYPE_3_TAG; 
+	head3 -> length = 0;
+    head3 -> epoch = final_epoch; 
+	head3 -> bits_per_entry = type3datawidth;
+
+    return 0;
 }
 
-int open_epoch(unsigned int timestamp_epoch){
-
-	return 0;
-}
-
-int parse(
-	struct raw_event *buffer, 
-	int bitmask, 
-	struct raw_event *in_pointer,
-	unsigned long long *t_new, 
-	unsigned long long *t_old
-
-){
-	int clock_value, detector_value;
-	unsigned int t_epoch, t_state, t_fine;
-
-	// read one value out of buffer
-	clock_value = buffer->_clock_value;
-	detector_value = buffer->_detector_value;
-	t_epoch = clock_value>>15; // take most significant 17 bits of timer
-	t_state = detector_value & bitmask; // get detector pattern
-	t_fine = (clock_value<<17) | (detector_value>>15); // fine time unit
-
-	/* trap weird time differences */
-	t_new = &( (((unsigned long long)t_epoch)<<32) + t_fine ); /* get event time */
-	if (*t_new < *t_old ) { /* negative time difference */
-	if ((*t_new - *t_old) & 0x1000000000000ll) { /* check rollover */
-		in_pointer++;
-		continue; /* ...are ignored */
-	}
-
-	t_old = t_new;
-
-	return 0;
-}
-
-int compress(){
-
-	// type 2 stream
-
-	// type 3 stream
-
-	return 0;
-}
 
 #endif

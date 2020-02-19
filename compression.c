@@ -4,10 +4,9 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/time.h>
 #include <sys/select.h>
 
-// #include "compression_helper.h"
+#include "compression_helper.h"
 #include "compression_structs.h"
 #include "compression_config.h"
 
@@ -17,7 +16,8 @@ usage:
 
 OPTIONS:
 	-i input_stream: stream to read raw events from
-	-o output_file: file to write compressed chunks to
+	-o2 output_file: file to write type2 compressed chunks to
+	-o23 output_file: file to write type3 compressed chunks to
 	-p protocol: string indicating protocol to be used
 
 */
@@ -30,6 +30,13 @@ int type2datawidth, type3datawidth;
 int this_epoch_converted_entries; // for output buffers
 int detcnts[16], num_detectors = 4; /* detector counts */
 int protocol_idx;
+struct header_2 head2; /* keeps header for type 2 files */
+struct header_3 head3; /* keeps header for type 2 files */
+
+int type2bitwidth = DEFAULT_BITDEPTH; /* for time encoding */
+int type2bitwidth_long = DEFAULT_BITDEPTH<<8; /* adaptive filtering */
+
+int index2, index3; // index in outbuf2, outbuf3
 
 char type2_file[FNAMELENGTH] = "";
 char type3_file[FNAMELENGTH] = "";
@@ -48,23 +55,25 @@ int main(int argc, char *argv[]){
 		case 'i':
 			sscanf(optarg, FNAMEFORMAT, input_file);
 			input_fd = open(input_file, O_RDONLY|O_NONBLOCK);
-			if (input_fd == -1) perror(errno);
+			if (input_fd == -1) fprintf(stderr, "input_fd open: %s\n", strerror(errno));
 			break;
 
 		case 'o2': // outfile2 name and type
 			sscanf(optarg, FNAMEFORMAT, type2_file);
 			output_fd2 = open(type2_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
-			if (output_fd2 == -1) perror(errno);
+			if (output_fd2 == -1) fprintf(stderr, "output_fd2 open: %s\n", strerror(errno));
 			break;
 
 	    case 'o3': /* outfile3 name and type */
 			sscanf(optarg, FNAMEFORMAT, type3_file);
 			output_fd3 = open(type3_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
-			if (output_fd3 == -1) perror(errno);
+			if (output_fd3 == -1) fprintf(stderr, "output_fd3 open: %s\n", strerror(errno));
 			break;
 
 		case 'p':
-			if (sscanf(optarg, "%d", &protocol_idx) != 1) perror(errno);
+			if (sscanf(optarg, "%d", &protocol_idx) != 1){
+				fprintf(stderr, "protocol sscanf: %s\n", strerror(errno));
+			} 
 			break;
 		}
 	}
@@ -89,9 +98,9 @@ int main(int argc, char *argv[]){
 	// initialise output buffers for type2 and type3 files
 	unsigned int *outbuf2, *outbuf3; // output buffer pointer
 	outbuf2=(unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
-    if (!outbuf2) return -emsg(18);
+    if (!outbuf2) printf("outbuf2 malloc failed");
 	outbuf3=(unsigned int*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned int));
-    if (!outbuf3) return -emsg(19);
+    if (!outbuf3) printf("outbuf3 malloc failed");
 
 	// prepare first epoch information
 	unsigned int t_epoch; // intermediate results
@@ -105,10 +114,15 @@ int main(int argc, char *argv[]){
 	this_epoch_converted_entries = 0;
 	for (int i=15; i; i--) detcnts[i]=0; /* clear histoogram */
     old_epoch = t_epoch; 
-	open_epoch(t_epoch);
+	open_epoch(t_epoch, &head2, &head3, type2bitwidth, type2datawidth, type3datawidth, protocol_idx);
+
+	/* initialize output buffers and temp storage*/
+    index2=0;sendword2=0;resbits2=32;
+    index3=0;sendword3=0;resbits3=32;
 
     epoch_init = 0; /* mark first epoch... */
     t_fine_old = 0;
+	
     /* prepare input buffer settings for first read */
 	bytes_read = 0;
 	elements_read = 0;
@@ -129,21 +143,21 @@ int main(int argc, char *argv[]){
 
 		// wait for data on input
 
-		FD_ZERO(&fd_poll); FD_SET(input, &fd_poll);
+		FD_ZERO(&fd_poll); FD_SET(input_fd, &fd_poll);
 		timeout.tv_usec = RETRYREADWAIT; timeout.tv_sec = 0;
 
-		int retval = select(input + 1, &fd_poll, NULL, NULL, &timeout);
+		int retval = select(input_fd + 1, &fd_poll, NULL, NULL, &timeout);
 		if (retval == -1) {
 			fprintf(stderr,"error on select: %d\n",errno);
 			break;
 		}
 
-		if (!FD_ISSET(input, &fd_poll)) {
+		if (!FD_ISSET(input_fd, &fd_poll)) {
 			fprintf(stderr,"error on FD_ISSET: %d\n",errno);
 			break;
 		}
 
-		bytes_read = read(input, active_buffer, INBUFENTRIES*sizeof(struct raw_event)-bytes_leftover);
+		bytes_read = read(input_fd, active_buffer, INBUFENTRIES*sizeof(struct raw_event)-bytes_leftover);
 		if (!bytes_read) continue; /* wait for next event */
 		if (bytes_read == -1) {
 			fprintf(stderr,"error on read: %d\n",errno);
@@ -185,12 +199,6 @@ int main(int argc, char *argv[]){
 			unsigned int t1,t2;  /* intermediate variables for bit packing */
 			unsigned int t_diff_bitmask;  /* detecting exceptopn words */
 			int except_count= 0; // long diff exception counter
-			int type2bitwidth = DEFAULT_BITDEPTH; /* for time encoding */
-			int type2bitwidth_long = DEFAULT_BITDEPTH<<8; /* adaptive filtering */
-
-			int index2; // index in outbuf2
-
-			struct header_2 head2; /* keeps header for type 2 files */
 
 	    	t_diff = t_fine - t_fine_old; /* time difference */
 	    	t_fine_old = t_fine;
