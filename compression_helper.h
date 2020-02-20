@@ -17,6 +17,49 @@ void atohex(char* target,unsigned int v) {
     target[9]=0;
 }
 
+int ll_to_bin(long long n)
+{
+  int c, k;
+
+  printf("%lld in binary is:\n", n);
+
+  for (c = 63; c >= 0; c--)
+  {
+    k = n >> c;
+
+    if (k & 1)
+      printf("1");
+    else
+      printf("0");
+  }
+
+  printf("\n");
+
+  return 0;
+}
+
+int int_to_bin(int n)
+{
+  int c, k;
+
+  printf("%d in binary is:\n", n);
+
+  for (c = 31; c >= 0; c--)
+  {
+    k = n >> c;
+
+    if (k & 1)
+      printf("1");
+    else
+      printf("0");
+  }
+
+  printf("\n");
+
+  return 0;
+}
+
+
 /* helper to fill protocol bit tables  */
 void fill_protocol_bit_tables(
 	int protocol_idx,
@@ -63,7 +106,7 @@ int open_epoch(
 	int type2datawidth,
 	int type3datawidth,
 	int protocol_idx) {
-		
+
     unsigned int final_epoch = t_epoch;
 
     /* populate headers preliminary */

@@ -4,6 +4,7 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
 #include <sys/select.h>
 
 #include "compression_helper.h"
@@ -16,8 +17,10 @@ usage:
 
 OPTIONS:
 	-i input_stream: stream to read raw events from
-	-o2 output_file: file to write type2 compressed chunks to
-	-o23 output_file: file to write type3 compressed chunks to
+	-o output_file: file to write type2 compressed chunks to
+	-O output_file: file to write type3 compressed chunks to
+	-c clock_bitwidth: number of bits used to represent a timestamp
+	-d detector_bitwidth: number of bits used to represent a detector
 	-p protocol: string indicating protocol to be used
 
 */
@@ -28,13 +31,13 @@ unsigned int sendword2, sendword3; /* bit accumulators */
 int resbits2, resbits3; // how many bits are not used in the accumulator
 int type2datawidth, type3datawidth;
 int this_epoch_converted_entries; // for output buffers
-int detcnts[16], num_detectors = 4; /* detector counts */
+int detcnts[16], clock_bitwidth, detector_bitwidth; /* detector counts */
 int protocol_idx;
 struct header_2 head2; /* keeps header for type 2 files */
 struct header_3 head3; /* keeps header for type 2 files */
 
 int type2bitwidth = DEFAULT_BITDEPTH; /* for time encoding */
-int type2bitwidth_long = DEFAULT_BITDEPTH<<8; /* adaptive filtering */
+int type2bitwidth_long = DEFAULT_BITDEPTH << 8; /* adaptive filtering */
 
 int index2, index3; // index in outbuf2, outbuf3
 
@@ -44,13 +47,11 @@ char type3_file[FNAMELENGTH] = "";
 int main(int argc, char *argv[]){
 
 	char input_file[FNAMELENGTH] = "";
-
-	int statemask = DEFAULT_STATEMASK; /* for result filtering */
 	int *type2patterntable, *type3patterntable; /* for protocol */
 
 	// parse options
 	int opt;
-	while((opt = getopt(argc, argv, "i:o2:o3:p:")) != EOF){
+	while((opt = getopt(argc, argv, "i:o:O:c:d:p:")) != EOF){
 		switch(opt){
 		case 'i':
 			sscanf(optarg, FNAMEFORMAT, input_file);
@@ -58,16 +59,28 @@ int main(int argc, char *argv[]){
 			if (input_fd == -1) fprintf(stderr, "input_fd open: %s\n", strerror(errno));
 			break;
 
-		case 'o2': // outfile2 name and type
+		case 'o': // outfile2 name and type
 			sscanf(optarg, FNAMEFORMAT, type2_file);
 			output_fd2 = open(type2_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
 			if (output_fd2 == -1) fprintf(stderr, "output_fd2 open: %s\n", strerror(errno));
 			break;
 
-	    case 'o3': /* outfile3 name and type */
+	    case 'O': /* outfile3 name and type */
 			sscanf(optarg, FNAMEFORMAT, type3_file);
 			output_fd3 = open(type3_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
 			if (output_fd3 == -1) fprintf(stderr, "output_fd3 open: %s\n", strerror(errno));
+			break;
+
+		case 'c':
+			if (sscanf(optarg, "%d", &clock_bitwidth) != 1){
+				fprintf(stderr, "clock_bitwidth sscanf: %s\n", strerror(errno));
+			} 
+			break;
+
+		case 'd':
+			if (sscanf(optarg, "%d", &detector_bitwidth) != 1){
+				fprintf(stderr, "detector_bitwidth sscanf: %s\n", strerror(errno));
+			} 
 			break;
 
 		case 'p':
@@ -78,20 +91,26 @@ int main(int argc, char *argv[]){
 		}
 	}
 
+	int clock_bitwidth_overlap = clock_bitwidth - 32;
+
 	// specify bitmask for detector
 	struct protocol *protocol = &protocol_list[protocol_idx];
-	int bitmask = protocol->detector_entries - 1;
+	int64_t clock_bitmask = ((1 << clock_bitwidth) - 1) << (64 - clock_bitwidth);
+	// ll_to_bin(clock_bitmask);
+	int64_t detector_bitmask = (1 << detector_bitwidth) - 1;
+	// ll_to_bin(detector_bitmask);
 
 	// initialise active_buffer and current_event 
-	struct raw_event *active_buffer;
+	int64_t *active_buffer; 
     fd_set fd_poll;  /* for polling */
 
-	active_buffer = (struct raw_event *) malloc(INBUFENTRIES * sizeof(struct raw_event));
+	active_buffer = (int64_t *) malloc(INBUFENTRIES * 8);
 	if (!active_buffer) exit(0);
 	char *active_pointer = (char *) active_buffer;
 	char *active_free_pointer;
 
-	struct raw_event *current_event; //pointer to raw_event currently being read
+	// int64_t *current_event; //pointer to 64-bit event currently being read
+	struct raw_event *current_event;
 
 	int bytes_leftover, bytes_read, elements_read;
 
@@ -103,26 +122,26 @@ int main(int argc, char *argv[]){
     if (!outbuf3) printf("outbuf3 malloc failed");
 
 	// prepare first epoch information
-	unsigned int t_epoch; // intermediate results
+	unsigned int epoch; // intermediate results
 
-	unsigned int old_epoch, t_fine_old;  /* storage for old epoch */
+	unsigned int old_epoch, timestamp_old;  /* storage for old epoch */
     int epoch_init;
 	unsigned long long t_new, t_old; // for consistency checks
 
-	t_epoch = make_first_epoch(DEFAULT_FIRSTEPOCHDELAY);
+	epoch = make_first_epoch(DEFAULT_FIRSTEPOCHDELAY);
 
 	this_epoch_converted_entries = 0;
-	for (int i=15; i; i--) detcnts[i]=0; /* clear histoogram */
-    old_epoch = t_epoch; 
-	open_epoch(t_epoch, &head2, &head3, type2bitwidth, type2datawidth, type3datawidth, protocol_idx);
+	for (int i = 1 << detector_bitwidth; i; i--) detcnts[i] = 0; /* clear histogram */
+    old_epoch = epoch; 
+	open_epoch(epoch, &head2, &head3, type2bitwidth, type2datawidth, type3datawidth, protocol_idx);
 
 	/* initialize output buffers and temp storage*/
-    index2=0;sendword2=0;resbits2=32;
-    index3=0;sendword3=0;resbits3=32;
+    index2 = 0; sendword2 = 0; resbits2 = 32;
+    index3 = 0; sendword3 = 0; resbits3 = 32;
 
     epoch_init = 0; /* mark first epoch... */
-    t_fine_old = 0;
-	
+    timestamp_old = 0;
+
     /* prepare input buffer settings for first read */
 	bytes_read = 0;
 	elements_read = 0;
@@ -133,15 +152,15 @@ int main(int argc, char *argv[]){
 	// start adding raw events to active_buffer
 	while (1) {
 
-		// /* rescue leftovers from previous read */
+		/* rescue leftovers from previous read */
 
-		// bytes_leftover =  bytes_read/sizeof(struct raw_event);
-		// bytes_leftover *= sizeof(struct raw_event);
-		// for (int i = 0 ; i<bytes_read - bytes_leftover ; i++) active_pointer[i] = active_pointer[i + bytes_leftover];
-		// bytes_leftover = bytes_read - bytes_leftover;  /* leftover from last time */
-		// active_free_pointer = &active_pointer[bytes_leftover]; /* pointer to next free character */
+		bytes_leftover =  bytes_read/8;
+		bytes_leftover *= 8;
+		for (int i = 0 ; i<bytes_read - bytes_leftover ; i++) active_pointer[i] = active_pointer[i + bytes_leftover];
+		bytes_leftover = bytes_read - bytes_leftover;  /* leftover from last time */
+		active_free_pointer = &active_pointer[bytes_leftover]; /* pointer to next free character */
 
-		// wait for data on input
+		// wait for data on input_fd
 
 		FD_ZERO(&fd_poll); FD_SET(input_fd, &fd_poll);
 		timeout.tv_usec = RETRYREADWAIT; timeout.tv_sec = 0;
@@ -157,7 +176,8 @@ int main(int argc, char *argv[]){
 			break;
 		}
 
-		bytes_read = read(input_fd, active_buffer, INBUFENTRIES*sizeof(struct raw_event)-bytes_leftover);
+		bytes_read = read(input_fd, active_buffer, INBUFENTRIES*8 - bytes_leftover);
+
 		if (!bytes_read) continue; /* wait for next event */
 		if (bytes_read == -1) {
 			fprintf(stderr,"error on read: %d\n",errno);
@@ -165,24 +185,29 @@ int main(int argc, char *argv[]){
 		}
 
 		bytes_read += bytes_leftover; /* add leftovers from last time */
-		elements_read = bytes_read/sizeof(struct raw_event);
+		elements_read = bytes_read/8;
 		current_event = active_buffer;
+
 
 		do {
 			// 0. read one value out of buffer
-			unsigned int clock_value, detector_value, t_state, t_fine;
+			long long msw, lsw;
+			msw = current_event->msw; // most significant word
+			lsw = current_event->lsw; // least significant word
+			long long full_word = (msw << 32) | (lsw);
+			ll_to_bin(full_word);
 
-			clock_value = current_event->_clock_value;
-			detector_value = current_event -> _detector_value;
+			long long clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
+			printf("clock_value: %lld\n", clock_value);
+			ll_to_bin(clock_value);
 
-			t_epoch = clock_value>>15; /* take most sig 17 bit of timer */
-			t_state = detector_value & statemask; /* get detector pattern */
-			t_fine = (clock_value <<17) | (detector_value >> 15); /* fine time unit */
+			unsigned int detector_value = full_word & detector_bitmask;
+			printf("detector_value: %d\n", detector_value);
 
 			// 1. consistency checks
 
 			// 1a) trap negative time differences
-		    t_new = (((unsigned long long) t_epoch)<<32) + t_fine; /* get event time */
+		    t_new = (((unsigned long long) epoch)<<32) + clock_value; /* get event time */
 		    if (t_new < t_old ) { /* negative time difference */
 				if ((t_new-t_old) & 0x1000000000000ll) { /* check rollover */
 		    		current_event++;
@@ -194,17 +219,17 @@ int main(int argc, char *argv[]){
 			t_old = t_new;
 
 			// 2. type-2 file filling
-			t_fine_old = 0;  /* storage for old epoch */
+			timestamp_old = 0;  /* storage for old epoch */
 			unsigned int t_diff; /* time difference for encoding */
 			unsigned int t1,t2;  /* intermediate variables for bit packing */
 			unsigned int t_diff_bitmask;  /* detecting exceptopn words */
 			int except_count= 0; // long diff exception counter
 
-	    	t_diff = t_fine - t_fine_old; /* time difference */
-	    	t_fine_old = t_fine;
+	    	t_diff = clock_value - timestamp_old; /* time difference */
+	    	timestamp_old = clock_value;
 
 			if (t_diff<2) { /* fudge unlikely events by 0.25 nsec */
-				t_fine+=2; t_diff+=2;
+				clock_value+=2; t_diff+=2;
 			}
 
 			t_diff_bitmask = (1<<type2bitwidth) - 1; // for packing
@@ -227,9 +252,6 @@ int main(int argc, char *argv[]){
 
 			printf("bytes_read: %d\n", bytes_read);
 			printf("bytes_leftover %d\n", bytes_leftover);
-			printf("%p\n", (void *)current_event);
-			printf("clock value: %d\n", clock_value);
-			printf("detector value: %d\n", detector_value);
 
 			current_event++;
 

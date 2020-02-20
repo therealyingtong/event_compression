@@ -2,15 +2,15 @@
 #define _COMPRESSION_STRUCTS_H 1
 
 typedef struct raw_event {
-	unsigned int _clock_value; /* most significant word */
-    unsigned int _detector_value; /* least significant word */
+	unsigned int msw; /* most significant word (32 bits) */
+    unsigned int lsw; /* least significant word (32 bits) */
 };
 
 /* protocol definitions */
 typedef struct protocol {
     int bits_per_entry_2;
     int bits_per_entry_3;
-    int detector_entries; /* number of detector entries; 16 for 4 detectors; this value -1 is used as bitmask for status */
+    int detector_entries; /* number of detector entries; 16 for 4 detectors; this value -1 is used as bitmask for states */
     int num_detectors; /* to cater logging purposes for more than 4 detectors */
     int pattern2[16];
     int pattern3[16];
