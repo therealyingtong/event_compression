@@ -1,5 +1,5 @@
-#ifndef _COMPRESSION_HELPER_H
-#define _COMPRESSION_HELPER_H 1
+#ifndef _COMPRESSION_UTILS_H
+#define _COMPRESSION_UTILS_H 1
 
 #include "compression_config.h"
 #include "compression_structs.h"

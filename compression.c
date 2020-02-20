@@ -7,7 +7,8 @@
 #include <stdint.h>
 #include <sys/select.h>
 
-#include "compression_helper.h"
+#include "compression_utils.h"
+#include "compression_helpers.h"
 #include "compression_structs.h"
 #include "compression_config.h"
 
@@ -30,7 +31,6 @@ int input_fd, output_fd2, output_fd3; // input and output file descriptors
 unsigned int sendword2, sendword3; /* bit accumulators */
 int resbits2, resbits3; // how many bits are not used in the accumulator
 int type2datawidth, type3datawidth;
-int this_epoch_converted_entries; // for output buffers
 int detcnts[16], clock_bitwidth, detector_bitwidth; /* detector counts */
 int protocol_idx;
 struct header_2 head2; /* keeps header for type 2 files */
@@ -92,6 +92,7 @@ int main(int argc, char *argv[]){
 	}
 
 	int clock_bitwidth_overlap = clock_bitwidth - 32;
+	int t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to timestamp bitwidth
 
 	// specify bitmask for detector
 	struct protocol *protocol = &protocol_list[protocol_idx];
@@ -109,7 +110,6 @@ int main(int argc, char *argv[]){
 	char *active_pointer = (char *) active_buffer;
 	char *active_free_pointer;
 
-	// int64_t *current_event; //pointer to 64-bit event currently being read
 	struct raw_event *current_event;
 
 	int bytes_leftover, bytes_read, elements_read;
@@ -121,26 +121,13 @@ int main(int argc, char *argv[]){
 	outbuf3=(unsigned int*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned int));
     if (!outbuf3) printf("outbuf3 malloc failed");
 
-	// prepare first epoch information
-	unsigned int epoch; // intermediate results
-
-	unsigned int old_epoch, timestamp_old;  /* storage for old epoch */
-    int epoch_init;
 	unsigned long long t_new, t_old; // for consistency checks
 
-	epoch = make_first_epoch(DEFAULT_FIRSTEPOCHDELAY);
-
-	this_epoch_converted_entries = 0;
 	for (int i = 1 << detector_bitwidth; i; i--) detcnts[i] = 0; /* clear histogram */
-    old_epoch = epoch; 
-	open_epoch(epoch, &head2, &head3, type2bitwidth, type2datawidth, type3datawidth, protocol_idx);
 
 	/* initialize output buffers and temp storage*/
     index2 = 0; sendword2 = 0; resbits2 = 32;
     index3 = 0; sendword3 = 0; resbits3 = 32;
-
-    epoch_init = 0; /* mark first epoch... */
-    timestamp_old = 0;
 
     /* prepare input buffer settings for first read */
 	bytes_read = 0;
@@ -207,51 +194,29 @@ int main(int argc, char *argv[]){
 			// 1. consistency checks
 
 			// 1a) trap negative time differences
-		    t_new = (((unsigned long long) epoch)<<32) + clock_value; /* get event time */
+		    t_new = clock_value; /* get event time */
 		    if (t_new < t_old ) { /* negative time difference */
 				if ((t_new-t_old) & 0x1000000000000ll) { /* check rollover */
 		    		current_event++;
 		    		continue; /* ...are ignored */
 				}
-				fprintf(stderr, "chopper: point 2, old: %llx, new: %llx\n", t_old,t_new);
+				fprintf(stderr, "negative time difference: point 2, old: %llx, new: %llx\n", t_old,t_new);
 			}
 
+			// 2. timestamp compression
+
+			long long t_diff;
+	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 
-			// 2. type-2 file filling
-			timestamp_old = 0;  /* storage for old epoch */
-			unsigned int t_diff; /* time difference for encoding */
-			unsigned int t1,t2;  /* intermediate variables for bit packing */
-			unsigned int t_diff_bitmask;  /* detecting exceptopn words */
-			int except_count= 0; // long diff exception counter
-
-	    	t_diff = clock_value - timestamp_old; /* time difference */
-	    	timestamp_old = clock_value;
-
-			if (t_diff<2) { /* fudge unlikely events by 0.25 nsec */
-				clock_value+=2; t_diff+=2;
-			}
-
-			t_diff_bitmask = (1<<type2bitwidth) - 1; // for packing
-
-			if (t_diff != (t2 = (t_diff & t_diff_bitmask))) { /* long diff exception */
-				except_count++;
-				/* first batch is codeword zero plus a few bits from tdiff */
-				t1 = t_diff >> type2bitwidth;
-				/* save first part of this longers structure */
-				if (resbits2 == 32) {
-					outbuf2[index2++]=t1;
-				} else {
-					sendword2 |= (t1 >> (32-resbits2));
-					outbuf2[index2++]=sendword2;
-					sendword2 = t1 << resbits2;
+			if (larger_t_diff(t_diff, t_diff_bitwidth)){
+				increase_t_diff_bitwidth(t_diff, t_diff_bitwidth);
+			} else {
+				encode_t_diff(t_diff, t_diff_bitwidth);
+				if (smaller_t_diff(t_diff, t_diff_bitwidth)){
+					decrease_t_diff_bitwidth(t_diff, t_diff_bitwidth);
 				}
-			}	
-
-			// insert compression here
-
-			printf("bytes_read: %d\n", bytes_read);
-			printf("bytes_leftover %d\n", bytes_leftover);
+			}
 
 			current_event++;
 

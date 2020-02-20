@@ -1,6 +1,7 @@
 {
 	"files.associations": {
 		"getopt.h": "c",
-		"compression_config.h": "c"
+		"compression_config.h": "c",
+		"compression_utils.h": "c"
 	}
 }
