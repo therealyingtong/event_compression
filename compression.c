@@ -38,7 +38,7 @@ int clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and det
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 unsigned int *outbuf2, *outbuf3; // output buffers pointers
 int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
-int64_t *sendword2, *sendword3; // full words to send to decoder
+int64_t sendword2 = 0, sendword3; // full words to send to decoder
 
 int main(int argc, char *argv[]){
 
@@ -206,16 +206,23 @@ int main(int argc, char *argv[]){
 			if (t_diff > (1 << t_diff_bitwidth)){
 				// if t_diff is too large to contain
 				int large_t_diff_bitwidth = log2(t_diff) + 1;
-				encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth);
+				encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
 				t_diff_bitwidth = large_t_diff_bitwidth;
 
+				ll_to_bin(sendword2);
+
+
 			} else {
-				encode_t_diff(t_diff, t_diff_bitwidth);
+				encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
 				if (t_diff < (1 << t_diff_bitwidth)){
 					// if t_diff can be contained in a smaller bitwidth
 					t_diff_bitwidth--;
 				}
+
+				ll_to_bin(sendword2);
+
 			}
+
 
 			current_event++;
 
