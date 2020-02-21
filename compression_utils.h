@@ -8,35 +8,50 @@
 #include <sys/time.h>
 #include <time.h>
 
-int encode_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_free, int64_t *sendword2){
-
-	// left-append t_diff to outbuf2 at outbuf2_free
-	*outbuf2 = *outbuf2 | (t_diff << *outbuf2_free);
-
-	// decrease outbuf2 free pointer
-	*outbuf2_free -= t_diff_bitwidth;
+int encode_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_offset, int64_t *sendword2){
 
 	// returns 1 if sendword2 is full
 	// returns 0 otherwise
 
-	return 0;
+	if (t_diff_bitwidth + *outbuf2_offset > 64){
+
+		int padding_to_64 = 64 - t_diff_bitwidth;
+		int overflow_bitwidth = t_diff_bitwidth + *outbuf2_offset - 64;
+		// 111... for leftmost overflow bits
+		long long overflow_bits = t_diff >> (64 - overflow_bitwidth);
+
+		// write to sendword2
+		*sendword2 = *outbuf2 | (t_diff << *outbuf2_offset);
+
+		// save overflow bits in outbuf2
+		*outbuf2 = overflow_bits;
+
+		// increase outbuf2_offset pointer
+		*outbuf2_offset += overflow_bitwidth;
+
+		return 1;
+
+	} else {
+
+		// left-append t_diff to outbuf2 at outbuf2_offset
+		*outbuf2 = *outbuf2 | (t_diff << *outbuf2_offset);
+
+		// increase outbuf2_offset pointer
+		*outbuf2_offset += t_diff_bitwidth;
+
+		return 0;
+
+	}
 
 }
 
-int encode_large_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_free, int64_t *sendword2){
+int encode_large_t_diff(long long t_diff, int t_diff_bitwidth, int large_t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_offset, int64_t *sendword2){
 
-	// pad t_diff to t_diff_bitwidth size
-	t_diff = t_diff << (64 - t_diff_bitwidth);
+	// write string of zeros of width t_diff_bitwidth
+	encode_t_diff(0, t_diff_bitwidth,  outbuf2, outbuf2_offset, sendword2);
 
-	// write padded_t_diff at outbuf2_free
-	*outbuf2 = *outbuf2 | (t_diff >> *outbuf2_free);
-
-	// returns 1 if sendword2 is full
-	// returns 0 otherwise
-
-
-
-	return 0;
+	// write t_diff in word of width large_t_diff_bitwidth
+	encode_t_diff(t_diff, large_t_diff_bitwidth,  outbuf2, outbuf2_offset, sendword2);
 
 }
 

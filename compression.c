@@ -37,7 +37,7 @@ int clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and det
 
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 unsigned int *outbuf2, *outbuf3; // output buffers pointers
-int *outbuf2_free, *outbuf3_free; // pointer to free idx in output buffers
+int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
 int64_t *sendword2, *sendword3; // full words to send to decoder
 
 int main(int argc, char *argv[]){
@@ -111,6 +111,7 @@ int main(int argc, char *argv[]){
 	int bytes_leftover, bytes_read, elements_read;
 
 	// initialise output buffers for type2 and type3 files
+	
 	outbuf2 = (unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
     if (!outbuf2) printf("outbuf2 malloc failed");
 	outbuf3 = (unsigned int*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned int));
