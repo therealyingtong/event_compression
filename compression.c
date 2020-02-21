@@ -6,9 +6,9 @@
 #include <errno.h>
 #include <stdint.h>
 #include <sys/select.h>
+#include <math.h>
 
 #include "compression_utils.h"
-#include "compression_helpers.h"
 #include "compression_structs.h"
 #include "compression_config.h"
 
@@ -28,21 +28,17 @@ OPTIONS:
 
 // global variables for I/O handling
 int input_fd, output_fd2, output_fd3; // input and output file descriptors
-unsigned int sendword2, sendword3; /* bit accumulators */
-int resbits2, resbits3; // how many bits are not used in the accumulator
-int type2datawidth, type3datawidth;
-int detcnts[16], clock_bitwidth, detector_bitwidth; /* detector counts */
-int protocol_idx;
-struct header_2 head2; /* keeps header for type 2 files */
-struct header_3 head3; /* keeps header for type 2 files */
-
-int type2bitwidth = DEFAULT_BITDEPTH; /* for time encoding */
-int type2bitwidth_long = DEFAULT_BITDEPTH << 8; /* adaptive filtering */
-
-int index2, index3; // index in outbuf2, outbuf3
-
 char type2_file[FNAMELENGTH] = "";
 char type3_file[FNAMELENGTH] = "";
+
+int detcnts[16]; /* detector counts */
+int protocol_idx;
+int clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and detector value
+
+int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
+unsigned int *outbuf2, *outbuf3; // output buffers pointers
+int *outbuf2_free, *outbuf3_free; // pointer to free idx in output buffers
+int64_t *sendword2, *sendword3; // full words to send to decoder
 
 int main(int argc, char *argv[]){
 
@@ -101,13 +97,13 @@ int main(int argc, char *argv[]){
 	int64_t detector_bitmask = (1 << detector_bitwidth) - 1;
 	// ll_to_bin(detector_bitmask);
 
-	// initialise active_buffer and current_event 
-	int64_t *active_buffer; 
+	// initialise inbuf and current_event 
     fd_set fd_poll;  /* for polling */
 
-	active_buffer = (int64_t *) malloc(INBUFENTRIES * 8);
-	if (!active_buffer) exit(0);
-	char *active_pointer = (char *) active_buffer;
+	struct raw_event *inbuf; // input buffer pointer
+	inbuf = (struct raw_event *) malloc(inbuf_bitwidth);
+	if (!inbuf) exit(0);
+	char *active_pointer = (char *) inbuf;
 	char *active_free_pointer;
 
 	struct raw_event *current_event;
@@ -115,10 +111,9 @@ int main(int argc, char *argv[]){
 	int bytes_leftover, bytes_read, elements_read;
 
 	// initialise output buffers for type2 and type3 files
-	unsigned int *outbuf2, *outbuf3; // output buffer pointer
-	outbuf2=(unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
+	outbuf2 = (unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
     if (!outbuf2) printf("outbuf2 malloc failed");
-	outbuf3=(unsigned int*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned int));
+	outbuf3 = (unsigned int*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned int));
     if (!outbuf3) printf("outbuf3 malloc failed");
 
 	unsigned long long t_new, t_old; // for consistency checks
@@ -126,17 +121,15 @@ int main(int argc, char *argv[]){
 	for (int i = 1 << detector_bitwidth; i; i--) detcnts[i] = 0; /* clear histogram */
 
 	/* initialize output buffers and temp storage*/
-    index2 = 0; sendword2 = 0; resbits2 = 32;
-    index3 = 0; sendword3 = 0; resbits3 = 32;
 
     /* prepare input buffer settings for first read */
 	bytes_read = 0;
 	elements_read = 0;
-	current_event = active_buffer;
+	current_event = inbuf;
 
     t_old = 0;
 
-	// start adding raw events to active_buffer
+	// start adding raw events to inbuf
 	while (1) {
 
 		/* rescue leftovers from previous read */
@@ -163,7 +156,7 @@ int main(int argc, char *argv[]){
 			break;
 		}
 
-		bytes_read = read(input_fd, active_buffer, INBUFENTRIES*8 - bytes_leftover);
+		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8 - bytes_leftover);
 
 		if (!bytes_read) continue; /* wait for next event */
 		if (bytes_read == -1) {
@@ -173,7 +166,7 @@ int main(int argc, char *argv[]){
 
 		bytes_read += bytes_leftover; /* add leftovers from last time */
 		elements_read = bytes_read/8;
-		current_event = active_buffer;
+		current_event = inbuf;
 
 
 		do {
@@ -209,12 +202,17 @@ int main(int argc, char *argv[]){
 	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 
-			if (larger_t_diff(t_diff, t_diff_bitwidth)){
-				increase_t_diff_bitwidth(t_diff, t_diff_bitwidth);
+			if (t_diff > (1 << t_diff_bitwidth)){
+				// if t_diff is too large to contain
+				int large_t_diff_bitwidth = log2(t_diff) + 1;
+				encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth);
+				t_diff_bitwidth = large_t_diff_bitwidth;
+
 			} else {
 				encode_t_diff(t_diff, t_diff_bitwidth);
-				if (smaller_t_diff(t_diff, t_diff_bitwidth)){
-					decrease_t_diff_bitwidth(t_diff, t_diff_bitwidth);
+				if (t_diff < (1 << t_diff_bitwidth)){
+					// if t_diff can be contained in a smaller bitwidth
+					t_diff_bitwidth--;
 				}
 			}
 
@@ -223,11 +221,11 @@ int main(int argc, char *argv[]){
 		} while(--elements_read);		
 	}
 
-	// when active_buffer is full, call processor()
+	// when inbuf is full, call processor()
 
-		// when done processing active_buffer:
-		// - store value of active_buffer in tmp
-		// - set value of active_buffer to be current_event
+		// when done processing inbuf:
+		// - store value of inbuf in tmp
+		// - set value of inbuf to be current_event
 		// - set value of current_event to be tmp
 
 			// call processor()

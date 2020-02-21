@@ -8,6 +8,39 @@
 #include <sys/time.h>
 #include <time.h>
 
+int encode_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_free, int64_t *sendword2){
+
+	// left-append t_diff to outbuf2 at outbuf2_free
+	*outbuf2 = *outbuf2 | (t_diff << *outbuf2_free);
+
+	// decrease outbuf2 free pointer
+	*outbuf2_free -= t_diff_bitwidth;
+
+	// returns 1 if sendword2 is full
+	// returns 0 otherwise
+
+	return 0;
+
+}
+
+int encode_large_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_free, int64_t *sendword2){
+
+	// pad t_diff to t_diff_bitwidth size
+	t_diff = t_diff << (64 - t_diff_bitwidth);
+
+	// write padded_t_diff at outbuf2_free
+	*outbuf2 = *outbuf2 | (t_diff >> *outbuf2_free);
+
+	// returns 1 if sendword2 is full
+	// returns 0 otherwise
+
+
+
+	return 0;
+
+}
+
+
 /* helper for name. adds a slash, hex file name and a termial 0 */
 char hexdigits[]="0123456789abcdef";
 void atohex(char* target,unsigned int v) {
@@ -20,42 +53,28 @@ void atohex(char* target,unsigned int v) {
 int ll_to_bin(long long n)
 {
   int c, k;
-
   printf("%lld in binary is:\n", n);
-
   for (c = 63; c >= 0; c--)
   {
-    k = n >> c;
-
-    if (k & 1)
-      printf("1");
-    else
-      printf("0");
+    k = n >> c; 
+    if (k & 1) printf("1");
+    else printf("0");
   }
-
   printf("\n");
-
   return 0;
 }
 
 int int_to_bin(int n)
 {
   int c, k;
-
   printf("%d in binary is:\n", n);
-
   for (c = 31; c >= 0; c--)
   {
     k = n >> c;
-
-    if (k & 1)
-      printf("1");
-    else
-      printf("0");
+    if (k & 1) printf("1");
+    else printf("0");
   }
-
   printf("\n");
-
   return 0;
 }
 
