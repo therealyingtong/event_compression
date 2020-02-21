@@ -92,9 +92,9 @@ int main(int argc, char *argv[]){
 
 	// specify bitmask for detector
 	struct protocol *protocol = &protocol_list[protocol_idx];
-	int64_t clock_bitmask = ((1 << clock_bitwidth) - 1) << (64 - clock_bitwidth);
+	int64_t clock_bitmask = (((long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth);
 	// ll_to_bin(clock_bitmask);
-	int64_t detector_bitmask = (1 << detector_bitwidth) - 1;
+	int64_t detector_bitmask = ((long long) 1 << detector_bitwidth) - 1;
 	// ll_to_bin(detector_bitmask);
 
 	// initialise inbuf and current_event 
@@ -176,14 +176,14 @@ int main(int argc, char *argv[]){
 			msw = current_event->msw; // most significant word
 			lsw = current_event->lsw; // least significant word
 			long long full_word = (msw << 32) | (lsw);
-			ll_to_bin(full_word);
+			// ll_to_bin(full_word) 	;
 
 			long long clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
-			printf("clock_value: %lld\n", clock_value);
-			ll_to_bin(clock_value);
+			// printf("clock_value: %lld\n", clock_value);
+			// ll_to_bin(clock_value);
 
 			unsigned int detector_value = full_word & detector_bitmask;
-			printf("detector_value: %d\n", detector_value);
+			// printf("detector_value: %d\n", detector_value);
 
 			// 1. consistency checks
 
@@ -199,30 +199,40 @@ int main(int argc, char *argv[]){
 
 			// 2. timestamp compression
 
-			long long t_diff;
-	    	t_diff = t_new - t_old; /* time difference */
+	    	long long t_diff = t_new - t_old; /* time difference */
+			// printf("t_diff: %lld\n", t_diff);
 			t_old = t_new;
 
-			if (t_diff > (1 << t_diff_bitwidth)){
+			if (t_diff + 1 > ((long long) 1 << t_diff_bitwidth)){
+
 				// if t_diff is too large to contain
 				int large_t_diff_bitwidth = log2(t_diff) + 1;
-				encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
+				// encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
 				t_diff_bitwidth = large_t_diff_bitwidth;
 
-				ll_to_bin(sendword2);
+				// printf("increase sendword2: ");
+				// ll_to_bin(sendword2);
 
 
 			} else {
-				encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
-				if (t_diff < (1 << t_diff_bitwidth)){
+				int sendword = encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
+				if (t_diff + 1 < ((long long)1 << t_diff_bitwidth)){
 					// if t_diff can be contained in a smaller bitwidth
 					t_diff_bitwidth--;
+					// printf("decrease\n");
+				} else {
+					printf("stay the same\n");
 				}
 
-				ll_to_bin(sendword2);
+				if (sendword){
+					printf("sendword2: ");
+					ll_to_bin(sendword2);
+				}
+
 
 			}
 
+			// printf("t_diff_bitwidth: %d\n", t_diff_bitwidth);
 
 			current_event++;
 
