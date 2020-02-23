@@ -38,7 +38,6 @@ int clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and det
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 unsigned int *outbuf2, *outbuf3; // output buffers pointers
 int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
-int64_t sendword2 = 0, sendword3; // full words to send to decoder
 
 int main(int argc, char *argv[]){
 
@@ -87,7 +86,7 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	int clock_bitwidth_overlap = clock_bitwidth - 32;
+	int clock_bitwidth_overlap = clock_bitwidth - 32; // how many more bits is in the timestamp than 32 bits
 	int t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to timestamp bitwidth
 
 	// specify bitmask for detector
@@ -108,7 +107,7 @@ int main(int argc, char *argv[]){
 
 	struct raw_event *current_event;
 
-	int bytes_leftover, bytes_read, elements_read;
+	int bytes_read, events_read;
 
 	// initialise output buffers for type2 and type3 files
 	
@@ -125,7 +124,7 @@ int main(int argc, char *argv[]){
 
     /* prepare input buffer settings for first read */
 	bytes_read = 0;
-	elements_read = 0;
+	events_read = 0;
 	current_event = inbuf;
 
     t_old = 0;
@@ -134,12 +133,6 @@ int main(int argc, char *argv[]){
 	while (1) {
 
 		/* rescue leftovers from previous read */
-
-		bytes_leftover =  bytes_read/8;
-		bytes_leftover *= 8;
-		for (int i = 0 ; i<bytes_read - bytes_leftover ; i++) active_pointer[i] = active_pointer[i + bytes_leftover];
-		bytes_leftover = bytes_read - bytes_leftover;  /* leftover from last time */
-		active_free_pointer = &active_pointer[bytes_leftover]; /* pointer to next free character */
 
 		// wait for data on input_fd
 
@@ -157,7 +150,8 @@ int main(int argc, char *argv[]){
 			break;
 		}
 
-		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8 - bytes_leftover);
+		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8);
+		// bytes_read = read(input_fd, inbuf, 8);
 
 		if (!bytes_read) continue; /* wait for next event */
 		if (bytes_read == -1) {
@@ -165,10 +159,10 @@ int main(int argc, char *argv[]){
 			break;
 		}
 
-		bytes_read += bytes_leftover; /* add leftovers from last time */
-		elements_read = bytes_read/8;
+		events_read = bytes_read/8; // each event is 64 bits aka 8 bytes
 		current_event = inbuf;
 
+		int64_t sendword2 = 0, sendword3; // full words to send to decoder
 
 		do {
 			// 0. read one value out of buffer
@@ -200,43 +194,35 @@ int main(int argc, char *argv[]){
 			// 2. timestamp compression
 
 	    	long long t_diff = t_new - t_old; /* time difference */
-			// printf("t_diff: %lld\n", t_diff);
+			printf("t_diff: %lld\n", t_diff);
 			t_old = t_new;
 
 			if (t_diff + 1 > ((long long) 1 << t_diff_bitwidth)){
 
 				// if t_diff is too large to contain
 				int large_t_diff_bitwidth = log2(t_diff) + 1;
-				// encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
+				int sendword = encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
 				t_diff_bitwidth = large_t_diff_bitwidth;
-
-				// printf("increase sendword2: ");
-				// ll_to_bin(sendword2);
-
+				printf("increase\n");
 
 			} else {
 				int sendword = encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2);
-				if (t_diff + 1 < ((long long)1 << t_diff_bitwidth)){
+				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
 					// if t_diff can be contained in a smaller bitwidth
 					t_diff_bitwidth--;
-					// printf("decrease\n");
+					printf("decrease\n");
 				} else {
 					printf("stay the same\n");
 				}
-
-				if (sendword){
-					printf("sendword2: ");
-					ll_to_bin(sendword2);
-				}
-
 
 			}
 
 			// printf("t_diff_bitwidth: %d\n", t_diff_bitwidth);
 
 			current_event++;
+			printf("events_read: %d\n", events_read);
 
-		} while(--elements_read);		
+		} while(--events_read);		
 	}
 
 	// when inbuf is full, call processor()

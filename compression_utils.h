@@ -29,6 +29,9 @@ int encode_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, 
 		// increase outbuf2_offset pointer
 		*outbuf2_offset += overflow_bitwidth;
 
+		printf("sendword2: ");
+		ll_to_bin(*sendword2);
+
 		return 1;
 
 	} else {
