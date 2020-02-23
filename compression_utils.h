@@ -20,6 +20,12 @@ int encode_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, 
 		// 111... for leftmost overflow bits
 		long long overflow_bits = t_diff >> (64 - overflow_bitwidth);
 
+		printf("outbuf2:\n");
+		ll_to_bin(*outbuf2);
+
+		printf("t_diff << *outbuf2_offset:\n");
+		ll_to_bin(t_diff << *outbuf2_offset);
+
 		// write to sendword2
 		*sendword2 = *outbuf2 | (t_diff << *outbuf2_offset);
 
@@ -27,7 +33,7 @@ int encode_t_diff(long long t_diff, int t_diff_bitwidth, unsigned int *outbuf2, 
 		*outbuf2 = overflow_bits;
 
 		// increase outbuf2_offset pointer
-		*outbuf2_offset += overflow_bitwidth;
+		*outbuf2_offset = overflow_bitwidth;
 
 		printf("sendword2: ");
 		ll_to_bin(*sendword2);
