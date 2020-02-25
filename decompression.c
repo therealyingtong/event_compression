@@ -18,9 +18,8 @@
 usage: 
 
 OPTIONS:
-	-i input_stream: stream to read compressed events from
-	-o output_file: file to write decompressed events to
-	-O output_file: file to write type3 compressed chunks to
+	-i input_stream: stream to read compressed words from
+	-o output_file: file to write decompressed words to
 	-c clock_bitwidth: initial number of bits used to represent a timestamp
 	-d detector_bitwidth: number of bits used to represent a detector
 	-p protocol: string indicating protocol to be used
@@ -35,12 +34,12 @@ unsigned int *outbuf;
 
 int protocol_idx;
 
-int clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and detector value
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 
 int main(int argc, char *argv[]){
 
 	char input_file[FNAMELENGTH] = "";
+	char clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and detector value
 
 	// parse options
 	int opt;
@@ -78,7 +77,7 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	int t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to timestamp bitwidth
+	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to timestamp bitwidth
 
 	// specify bitmask for detector
 	struct protocol *protocol = &protocol_list[protocol_idx];
@@ -87,18 +86,18 @@ int main(int argc, char *argv[]){
 	int64_t detector_bitmask = ((long long) 1 << detector_bitwidth) - 1;
 	// ll_to_bin(detector_bitmask);
 
-	// initialise inbuf and current_event 
+	// initialise inbuf and current_word 
     fd_set fd_poll;  /* for polling */
 
-	struct raw_event *inbuf; // input buffer pointer
-	inbuf = (struct raw_event *) malloc(inbuf_bitwidth);
+	int64_t *inbuf; // input buffer pointer
+	inbuf = (int64_t *) malloc(inbuf_bitwidth);
 	if (!inbuf) exit(0);
 	char *active_pointer = (char *) inbuf;
 	char *active_free_pointer;
 
-	struct raw_event *current_event;
+	int64_t *current_word;
 
-	int bytes_read, events_read;
+	int bytes_read, words_read;
 
 	// initialise output buffers for output files
 	
@@ -107,14 +106,15 @@ int main(int argc, char *argv[]){
 
 	/* prepare input buffer settings for first read */
 	bytes_read = 0;
-	events_read = 0;
-	current_event = inbuf;
+	words_read = 0;
+	current_word = inbuf;
+	int outbuf_offset = 0; // no. of bits offset in outbuf
+	int64_t clock_bitmask = (((long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth);
+	char t_diff_bitwidth = clock_bitwidth;
+	long long t_diff_bitmask = clock_bitmask;
 
-
-	// start adding raw events to inbuf
+	// start adding raw words to inbuf
 	while (1) {
-
-		/* rescue leftovers from previous read */
 
 		// wait for data on input_fd
 
@@ -135,86 +135,52 @@ int main(int argc, char *argv[]){
 		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8);
 		// bytes_read = read(input_fd, inbuf, 8);
 
-		if (!bytes_read) continue; /* wait for next event */
+		if (!bytes_read) continue; /* wait for next word */
 		if (bytes_read == -1) {
 			fprintf(stderr,"error on read: %d\n",errno);
 			break;
 		}
 
-		events_read = bytes_read/8; // each event is 64 bits aka 8 bytes
-		current_event = inbuf;
+		words_read = bytes_read/8; // each word is 64 bits aka 8 bytes
+		current_word = inbuf;
+		char new_buf = 0; // boolean to indicate whether to stay with current buffer
+		char new_word = 0; // boolean to indicate whether to read a new word
+		int bits_read = 0; // counter for bits read in current buffer
 
-		int64_t sendword2 = 0, sendword3; // full words to send to decoder
+		int64_t timestamp = 0; // timestamps to write to output file
 
 		do {
-			// 0. read one value out of buffer
-			long long msw, lsw;
-			msw = current_event->msw; // most significant word
-			lsw = current_event->lsw; // least significant word
-			long long full_word = (msw << 32) | (lsw);
-			// ll_to_bin(full_word) 	;
 
-			long long clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
-			// printf("clock_value: %lld\n", clock_value);
-			// ll_to_bin(clock_value);
-
-			unsigned int detector_value = full_word & detector_bitmask;
-			// printf("detector_value: %d\n", detector_value);
-
-			// 1. consistency checks
-
-			// 1a) trap negative time differences
-		    t_new = clock_value; /* get event time */
-		    if (t_new < t_old ) { /* negative time difference */
-				if ((t_new-t_old) & 0x1000000000000ll) { /* check rollover */
-		    		current_event++;
-		    		continue; /* ...are ignored */
-				}
-				fprintf(stderr, "negative time difference: point 2, old: %llx, new: %llx\n", t_old,t_new);
+			if (new_word){
+				// read a new word
+				current_word++;
+				printf("words_read: %d\n", words_read);
 			}
 
-			// // 2. timestamp compression
+			// 0. read next t_diff_bitwidth bits out of word
+			long long t_diff = decode_t_diff(t_diff_bitwidth, &current_word, &outbuf_offset, &timestamp, &output_fd);
+			
+			ll_to_bin(t_diff);
 
-	    	long long t_diff = t_new - t_old; /* time difference */
-			printf("t_diff: %lld\n", t_diff);
-			t_old = t_new;
-
-			if (t_diff + 1 > ((long long) 1 << t_diff_bitwidth)){
-
-				// if t_diff is too large to contain
-				int large_t_diff_bitwidth = log2(t_diff) + 1;
-				int sendword = encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2, output_fd2);
-				t_diff_bitwidth = large_t_diff_bitwidth;
-				printf("increase\n");
-
+			// 1. adjust t_diff_bitwidth 
+			if (!t_diff){
+				long long t_diff = decode_large_t_diff(&current_word, &outbuf_offset);
+			
 			} else {
-				int sendword = encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &outbuf2_offset, &sendword2, output_fd2);
 				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
-					// if t_diff can be contained in a smaller bitwidth
 					t_diff_bitwidth--;
-					printf("decrease\n");
-				} else {
-					printf("stay the same\n");
 				}
-
 			}
 
-			// write(output_fd2, current_event, 8);
-
-			// printf("t_diff_bitwidth: %d\n", t_diff_bitwidth);
-
-			current_event++;
-			printf("events_read: %d\n", events_read);
-
-		} while(--events_read);		
+		} while(!new_buf);		
 	}
 
 	// when inbuf is full, call processor()
 
 		// when done processing inbuf:
 		// - store value of inbuf in tmp
-		// - set value of inbuf to be current_event
-		// - set value of current_event to be tmp
+		// - set value of inbuf to be current_word
+		// - set value of current_word to be tmp
 
 			// call processor()
 
