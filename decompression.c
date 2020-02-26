@@ -134,7 +134,7 @@ int main(int argc, char *argv[]){
 
 		words_read = bytes_read/8; // each word is 64 bits aka 8 bytes
 		current_word = inbuf;
-		int bits_read = 0; // counter for bits read in current buffer
+		long bits_read = 0; // counter for bits read in current buffer
 		int64_t t_diff = 0; // t_diffs to write to output file
 
 		do {

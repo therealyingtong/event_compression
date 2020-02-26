@@ -9,63 +9,48 @@
 #include <time.h>
 #include "math_utils.h"
 
-int encode_t_diff(long long t_diff, char t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_offset, int64_t *sendword2, int output_fd2){
+long long write_bits_to_buffer(long long bitstring, long *buffer, long *bits_written, char bitwidth){
 
-	// returns 1 if sendword2 is full
-	// returns 0 otherwise
+	char buffer_offset = *bits_written % 64;
+	*bits_written += bitwidth;
 
-	if (t_diff_bitwidth + *outbuf2_offset > 64){
+	if (buffer_offset + bitwidth > 64){
+		// fill word and write overlap into buffer
+		char overlap_bitwidth = buffer_offset + bitwidth - 64;
 
-		int padding_to_64 = 64 - t_diff_bitwidth;
-		int overflow_bitwidth = t_diff_bitwidth + *outbuf2_offset - 64;
-		// 111... for leftmost overflow bits
-		long long overflow_bits = t_diff >> (64 - overflow_bitwidth);
+		long long first_part_bitstring = read_bits_from_word(bitstring, bitwidth - overlap_bitwidth, 64 - bitwidth);
 
-		// printf("outbuf2:\n");
-		// ll_to_bin(*outbuf2);
+		long long second_part_bitstring = read_bits_from_word(bitstring, overlap_bitwidth, 64 - overlap_bitwidth);
 
-		// printf("t_diff << *outbuf2_offset:\n");
-		// ll_to_bin(t_diff << *outbuf2_offset);
+		long word = *buffer | (first_part_bitstring >> buffer_offset);
+		*buffer = second_part_bitstring << (64 - overlap_bitwidth);
 
-		// write to sendword2
-		*sendword2 = *outbuf2 | (t_diff << *outbuf2_offset);
-
-		// save overflow bits in outbuf2
-		*outbuf2 = overflow_bits;
-
-		// increase outbuf2_offset pointer
-		*outbuf2_offset = overflow_bitwidth;
-
-		write(output_fd2, sendword2, 8);
-		printf("sendword2: ");
-		ll_to_bin(*sendword2);
-
-		return 1;
+		return word;
 
 	} else {
-
-		// left-append t_diff to outbuf2 at outbuf2_offset
-		*outbuf2 = *outbuf2 | (t_diff << *outbuf2_offset);
-
-		// increase outbuf2_offset pointer
-		*outbuf2_offset += t_diff_bitwidth;
-
+		// write into buffer
+		*buffer = *buffer | (bitstring << (64 - bitwidth));
 		return 0;
-
 	}
 
 }
 
-int encode_large_t_diff(long long t_diff, char t_diff_bitwidth, char large_t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_offset, int64_t *sendword2, int output_fd2){
+long long encode_t_diff(long long t_diff, char t_diff_bitwidth, long *outbuf2, long *bits_written, int output_fd2){
+
+	long long word = write_bits_to_buffer(t_diff, outbuf2, bits_written, t_diff_bitwidth);
+
+}
+
+int encode_large_t_diff(long long t_diff, char t_diff_bitwidth, char large_t_diff_bitwidth, long *outbuf2, long *bits_written, int output_fd2){
 
 	// write string of zeros of width t_diff_bitwidth
-	encode_t_diff(0, t_diff_bitwidth,  outbuf2, outbuf2_offset, sendword2, output_fd2);
+	long long write1 = write_bits_to_buffer(0, outbuf2, bits_written, t_diff_bitwidth);
 
 	// write large_t_diff_bitwidth in next byte
-	encode_t_diff(large_t_diff_bitwidth, 8,  outbuf2, outbuf2_offset, sendword2, output_fd2);
+	long long write2 = write_bits_to_buffer(large_t_diff_bitwidth, outbuf2, bits_written, (char) 8);
 
 	// write t_diff in word of width large_t_diff_bitwidth
-	encode_t_diff(t_diff, large_t_diff_bitwidth,  outbuf2, outbuf2_offset, sendword2, output_fd2);
+	long long write3 = write_bits_to_buffer(t_diff, outbuf2, bits_written, large_t_diff_bitwidth);
 
 }
 
