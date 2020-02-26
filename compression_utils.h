@@ -22,7 +22,7 @@ long long decode_t_diff(char *t_diff_bitwidth, int *bits_read, long long *leftov
 
 		char truncated_bitwidth = *t_diff_bitwidth - overlap_bitwidth;
 		long long truncated_bitmask = (((long long) 1 << truncated_bitwidth) - 1); // make bitmask for specified bitwidth
-		long long truncated_t_diff = (truncated_bitmask << *word_offset) & *current_word;
+		long long truncated_t_diff = ((truncated_bitmask << *word_offset) & *current_word) >> *word_offset;
 		*leftover_bits = truncated_t_diff;
 
 		*word_offset = 0; // reset word_offset for new word
@@ -39,19 +39,21 @@ long long decode_t_diff(char *t_diff_bitwidth, int *bits_read, long long *leftov
 
 		char truncated_bitwidth = *t_diff_bitwidth - overlap_bitwidth;
 		long long truncated_bitmask = (((long long) 1 << truncated_bitwidth) - 1); // make bitmask for specified bitwidth
-		long long truncated_t_diff = (truncated_bitmask << *word_offset) & *current_word;
+		long long truncated_t_diff = ((truncated_bitmask << *word_offset) & *current_word) >> *word_offset;
 		*leftover_bits = truncated_t_diff;
 
 		*word_offset = 0; // reset word_offset for new word
 		*bits_read += *t_diff_bitwidth;
 		*new_word = 1;
 
+		return 0;
+
 	} else {
 
-		// the whole timestamp is contained within the word, so we can simply read timestamp from the last word_offset
+		// the whole remaining part of the timestamp is contained within the word, so we can simply read timestamp from the last word_offset
 
 		long long t_diff_bitmask = ((long long) 1 << *t_diff_bitwidth) - 1; // make bitmask for specified bitwidth
-		long long t_diff = 	(t_diff_bitmask << *word_offset) & *current_word;
+		long long t_diff = ((t_diff_bitmask << *word_offset) & *current_word) >> *word_offset;
 
 		// rescue leftover bits from previous word
 		if (*leftover_bits){
@@ -63,6 +65,18 @@ long long decode_t_diff(char *t_diff_bitwidth, int *bits_read, long long *leftov
 		ll_to_bin(*timestamp);
 
 		*bits_read += *t_diff_bitwidth;
+
+ 		if (*word_offset + *t_diff_bitwidth == 64){
+			 // edge case: we've reached exactly end of word
+			 *new_word = 1;
+			 *word_offset = 0;
+		}
+
+ 		if (*bits_read == INBUFENTRIES * 8){
+			 // edge case: we've reached exactly end of buffer
+			 *new_buf = 1;
+			 *word_offset = 0;
+		}
 
 		return 1;
 
