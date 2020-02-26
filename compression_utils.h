@@ -9,7 +9,6 @@
 #include <time.h>
 #include "math_utils.h"
 
-
 int encode_t_diff(long long t_diff, char t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_offset, int64_t *sendword2, int output_fd2){
 
 	// returns 1 if sendword2 is full

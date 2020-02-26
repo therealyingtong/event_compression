@@ -89,14 +89,12 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to timestamp bitwidth
+	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock_bitwidth
 
 	// specify bitmask for detector
 	struct protocol *protocol = &protocol_list[protocol_idx];
 	int64_t clock_bitmask = (((long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth);
-	// ll_to_bin(clock_bitmask);
 	int64_t detector_bitmask = ((long long) 1 << detector_bitwidth) - 1;
-	// ll_to_bin(detector_bitmask);
 
 	// initialise inbuf and current_event 
     fd_set fd_poll;  /* for polling */
@@ -133,8 +131,6 @@ int main(int argc, char *argv[]){
 
 	// start adding raw events to inbuf
 	while (1) {
-
-		/* rescue leftovers from previous read */
 
 		// wait for data on input_fd
 
@@ -193,10 +189,9 @@ int main(int argc, char *argv[]){
 				fprintf(stderr, "negative time difference: point 2, old: %llx, new: %llx\n", t_old,t_new);
 			}
 
-			// // 2. timestamp compression
+			// 2. timestamp compression
 
 	    	long long t_diff = t_new - t_old; /* time difference */
-			// printf("t_diff: %lld\n", t_diff);
 			t_old = t_new;
 
 			if (t_diff + 1 > ((long long) 1 << t_diff_bitwidth)){
@@ -212,19 +207,13 @@ int main(int argc, char *argv[]){
 				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
 					// if t_diff can be contained in a smaller bitwidth
 					t_diff_bitwidth--;
-					// printf("decrease\n");
 				} else {
 					// printf("stay the same\n");
 				}
 
 			}
 
-			// write(output_fd2, current_event, 8);
-
-			// printf("t_diff_bitwidth: %d\n", t_diff_bitwidth);
-
 			current_event++;
-			// printf("events_read: %d\n", events_read);
 
 		} while(--events_read);		
 	}

@@ -78,13 +78,7 @@ int main(int argc, char *argv[]){
 	}
 
 	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock bitwidth
-
-	// specify bitmask for detector
-	struct protocol *protocol = &protocol_list[protocol_idx];
-	int64_t clock_bitmask = (((long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth);
-	// ll_to_bin(clock_bitmask);
-	int64_t detector_bitmask = ((long long) 1 << detector_bitwidth) - 1;
-	// ll_to_bin(detector_bitmask);
+	long long t_diff_bitmask = ((long long) 1 << t_diff_bitwidth) - 1; 
 
 	// initialise inbuf and current_word 
     fd_set fd_poll;  /* for polling */
@@ -109,7 +103,6 @@ int main(int argc, char *argv[]){
 	words_read = 0;
 	current_word = inbuf;
 	int outbuf_offset = 0; // no. of bits offset in outbuf
-	long long t_diff_bitmask = clock_bitmask;
 
 	// start adding raw words to inbuf
 	while (1) {
@@ -141,25 +134,10 @@ int main(int argc, char *argv[]){
 
 		words_read = bytes_read/8; // each word is 64 bits aka 8 bytes
 		current_word = inbuf;
-		char new_buf = 0; // boolean to indicate whether to stay with current buffer
-		char new_word = 1; // boolean to indicate whether to read a new word
 		int bits_read = 0; // counter for bits read in current buffer
-		long long leftover_bits = 0;
-		char leftover_bitwidth = 0;
-		char word_offset = 0;
-
 		int64_t t_diff = 0; // t_diffs to write to output file
 
 		do {
-
-			if (new_word){
-				// read a new word
-				// ll_to_bin(*current_word);
-
-				current_word++;
-				printf("\n\n words_read: %d\n\n", words_read);
-				new_word = 0;
-			}
 
 			// 0. read next t_diff_bitwidth bits out of word
 			decode_t_diff(&t_diff_bitwidth, &bits_read, &leftover_bits, &leftover_bitwidth, current_word, &word_offset, &t_diff, output_fd, &new_buf, &new_word);
