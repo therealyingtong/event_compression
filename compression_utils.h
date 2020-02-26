@@ -8,31 +8,41 @@
 #include <sys/time.h>
 #include <time.h>
 
-long long decode_t_diff(char *t_diff_bitwidth, int *bits_read, long long *leftover_bits, char *leftover_bitwidth, int64_t *current_word, char *word_offset, int64_t *timestamp, int output_fd, char *new_buf, char* new_word){
+long long decode_t_diff(char *t_diff_bitwidth, int *bits_read, long long *leftover_bits, char *leftover_bitwidth, int64_t *current_word, char *word_offset, int64_t *t_diff, int output_fd, char *new_buf, char* new_word){
 
-	// returns 1 if complete timestamp has been read
+
+	// returns t_diff if complete t_diff has been read
 	// returns 0 otherwise
 
-	if (*bits_read + *t_diff_bitwidth > INBUFENTRIES * 8){
+	// if (*bits_read + *t_diff_bitwidth > INBUFENTRIES * 8){
 
-		// we've finished reading the input buffer before reading our whole timestamp. so we read whatever we can of the timestamp into leftover_bits, and rescue it in the next buffer
+	// 	// we've finished reading the input buffer before reading our whole t_diff. so we read whatever we can of the t_diff into leftover_bits, and rescue it in the next buffer
 
-		char overlap_bitwidth = *bits_read + *t_diff_bitwidth - INBUFENTRIES * 8;
-		*t_diff_bitwidth = overlap_bitwidth;
+	// 	char overlap_bitwidth = *bits_read + *t_diff_bitwidth - INBUFENTRIES * 8;
+	// 	*t_diff_bitwidth = overlap_bitwidth;
 
-		char truncated_bitwidth = *t_diff_bitwidth - overlap_bitwidth;
-		long long truncated_bitmask = (((long long) 1 << truncated_bitwidth) - 1); // make bitmask for specified bitwidth
-		long long truncated_t_diff = ((truncated_bitmask << *word_offset) & *current_word) >> *word_offset;
-		*leftover_bits = truncated_t_diff;
+	// 	char truncated_bitwidth = *t_diff_bitwidth - overlap_bitwidth;
+	// 	long long truncated_bitmask = (((long long) 1 << truncated_bitwidth) - 1); // make bitmask for specified bitwidth
+	// 	long long truncated_t_diff = ((truncated_bitmask << *word_offset) & *current_word) >> *word_offset;
+	// 	*leftover_bits = truncated_t_diff;
 
-		*word_offset = 0; // reset word_offset for new word
-		*bits_read = 0; // reset bits_read counter for new buffer
-		*new_buf = 1;
+	// 	*word_offset = 0; // reset word_offset for new word
+	// 	*bits_read = 0; // reset bits_read counter for new buffer
+	// 	*new_buf = 1;
 
-		return 0;
+	// 	return 0;
 
-	} else if (*word_offset + *t_diff_bitwidth > 64) {
-		// we've finished reading the word before reading our whole timestamp. so we read whatever we can of the timestamp into leftover_bits, and rescue it in the next buffer
+	// } else {
+
+	// }
+	
+	if (*word_offset + *t_diff_bitwidth > 63) {
+
+		// we've finished reading the word before reading our whole t_diff. so we read whatever we can of the t_diff into leftover_bits, and rescue it in the next buffer
+
+		printf("*word_offset + *t_diff_bitwidth > 64\n");
+		printf("*word_offset: %d\n", *word_offset);
+		printf("*t_diff_bitwidth: %d\n", *t_diff_bitwidth);
 
 		char overlap_bitwidth = *t_diff_bitwidth + *word_offset - 64;
 		*t_diff_bitwidth = overlap_bitwidth;
@@ -50,46 +60,56 @@ long long decode_t_diff(char *t_diff_bitwidth, int *bits_read, long long *leftov
 
 	} else {
 
-		// the whole remaining part of the timestamp is contained within the word, so we can simply read timestamp from the last word_offset
+		// the whole remaining part of the t_diff is contained within the word, so we can simply read t_diff from the last word_offset
+
+		printf("*word_offset + *t_diff_bitwidth <= 63\n");
+		printf("*word_offset: %d\n", *word_offset);
+		printf("*t_diff_bitwidth: %d\n", *t_diff_bitwidth);
 
 		long long t_diff_bitmask = ((long long) 1 << *t_diff_bitwidth) - 1; // make bitmask for specified bitwidth
-		long long t_diff = ((t_diff_bitmask << *word_offset) & *current_word) >> *word_offset;
+		long long current_t_diff = ((t_diff_bitmask << *word_offset) & *current_word) >> *word_offset;
 
 		// rescue leftover bits from previous word
 		if (*leftover_bits){
-			t_diff = (t_diff << *leftover_bitwidth) | *leftover_bits;
+			current_t_diff = (current_t_diff << *leftover_bitwidth) | *leftover_bits;
 		}
 
-		*timestamp = t_diff; // write complete t_diff to timestamp
-		printf("timestamp: %lld\n", *timestamp);
-		ll_to_bin(*timestamp);
 
-		*bits_read += *t_diff_bitwidth;
+		*t_diff = current_t_diff; // write complete t_diff to t_diff
 
- 		if (*word_offset + *t_diff_bitwidth == 64){
+ 		if (*word_offset + *t_diff_bitwidth == 63){
 			 // edge case: we've reached exactly end of word
 			 *new_word = 1;
 			 *word_offset = 0;
 		}
 
- 		if (*bits_read == INBUFENTRIES * 8){
+ 		else if (*bits_read == INBUFENTRIES * 8){
 			 // edge case: we've reached exactly end of buffer
 			 *new_buf = 1;
 			 *word_offset = 0;
 		}
 
-		return 1;
+		else {
+			*word_offset += *t_diff_bitwidth;
+			*bits_read += *t_diff_bitwidth;
+			*new_word = 0;
+		}
+
+		return *t_diff;
 
 	}
 
 }
 
-long long decode_large_t_diff(char *t_diff_bitwidth, int64_t *current_word, int *outbuf_offset, int64_t *timestamp, int output_fd){
+long long decode_large_t_diff(char *t_diff_bitwidth, int *bits_read, long long *leftover_bits, char *leftover_bitwidth, int64_t *current_word, char *word_offset, int64_t *t_diff, int output_fd, char *new_buf, char* new_word){
 
-	char large_t_diff_bitwidth = decode_t_diff(8, current_word, outbuf_offset, timestamp, output_fd); // read new large bitwidth
-	long long t_diff = decode_t_diff(&large_t_diff_bitwidth, current_word, outbuf_offset, timestamp, output_fd);
+	printf("decode_large_t_diff");
+
+	char large_t_diff_bitwidth = decode_t_diff(8, bits_read, leftover_bits, leftover_bitwidth, current_word, word_offset, t_diff, output_fd, new_buf, new_word); // read new large bitwidth
 	*t_diff_bitwidth = large_t_diff_bitwidth;
-	return t_diff;
+	decode_t_diff(t_diff_bitwidth, bits_read, leftover_bits, leftover_bitwidth, current_word, word_offset, t_diff, output_fd, new_buf, new_word);
+
+	return 0;
 }
 
 int encode_t_diff(long long t_diff, char t_diff_bitwidth, unsigned int *outbuf2, int *outbuf2_offset, int64_t *sendword2, int output_fd2){

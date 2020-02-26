@@ -77,7 +77,7 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to timestamp bitwidth
+	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock bitwidth
 
 	// specify bitmask for detector
 	struct protocol *protocol = &protocol_list[protocol_idx];
@@ -109,8 +109,6 @@ int main(int argc, char *argv[]){
 	words_read = 0;
 	current_word = inbuf;
 	int outbuf_offset = 0; // no. of bits offset in outbuf
-	int64_t clock_bitmask = (((long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth);
-	char t_diff_bitwidth = clock_bitwidth;
 	long long t_diff_bitmask = clock_bitmask;
 
 	// start adding raw words to inbuf
@@ -144,27 +142,30 @@ int main(int argc, char *argv[]){
 		words_read = bytes_read/8; // each word is 64 bits aka 8 bytes
 		current_word = inbuf;
 		char new_buf = 0; // boolean to indicate whether to stay with current buffer
-		char new_word = 0; // boolean to indicate whether to read a new word
+		char new_word = 1; // boolean to indicate whether to read a new word
 		int bits_read = 0; // counter for bits read in current buffer
+		long long leftover_bits = 0;
+		char leftover_bitwidth = 0;
+		char word_offset = 0;
 
-		int64_t timestamp = 0; // timestamps to write to output file
+		int64_t t_diff = 0; // t_diffs to write to output file
 
 		do {
 
 			if (new_word){
 				// read a new word
+				// ll_to_bin(*current_word);
+
 				current_word++;
 				printf("words_read: %d\n", words_read);
 			}
 
 			// 0. read next t_diff_bitwidth bits out of word
-			long long t_diff = decode_t_diff(t_diff_bitwidth, &current_word, &outbuf_offset, &timestamp, &output_fd);
+			decode_t_diff(&t_diff_bitwidth, &bits_read, &leftover_bits, &leftover_bitwidth, current_word, &word_offset, &t_diff, output_fd, &new_buf, &new_word);
 			
-			ll_to_bin(t_diff);
-
 			// 1. adjust t_diff_bitwidth 
 			if (!t_diff){
-				long long t_diff = decode_large_t_diff(&current_word, &outbuf_offset);
+				decode_large_t_diff(&t_diff_bitwidth, &bits_read, &leftover_bits, &leftover_bitwidth, current_word, &word_offset, &t_diff, output_fd, &new_buf, &new_word);
 			
 			} else {
 				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
@@ -172,7 +173,7 @@ int main(int argc, char *argv[]){
 				}
 			}
 
-		} while(!new_buf);		
+		} while(--words_read);		
 	}
 
 	// when inbuf is full, call processor()
