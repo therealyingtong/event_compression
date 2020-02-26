@@ -8,7 +8,7 @@
 #include <sys/select.h>
 #include <math.h>
 
-#include "compression_utils.h"
+#include "decompression_utils.h"
 #include "compression_structs.h"
 #include "compression_config.h"
 
@@ -135,19 +135,20 @@ int main(int argc, char *argv[]){
 		words_read = bytes_read/8; // each word is 64 bits aka 8 bytes
 		current_word = inbuf;
 		long bits_read = 0; // counter for bits read in current buffer
-		int64_t t_diff = 0; // t_diffs to write to output file
+		long long t_diff = 0; // t_diffs to write to output file
 
 		do {
 
 			// 0. read next t_diff_bitwidth bits out of word
-			decode_t_diff(&t_diff_bitwidth, &bits_read, &leftover_bits, &leftover_bitwidth, current_word, &word_offset, &t_diff, output_fd, &new_buf, &new_word);
+			t_diff = decode_t_diff(&t_diff_bitwidth, &bits_read, current_word, output_fd);
+			ll_to_bin(t_diff);
 			
 			// 1. adjust t_diff_bitwidth 
-			if (!new_word && !t_diff){
-				decode_large_t_diff(&t_diff_bitwidth, &bits_read, &leftover_bits, &leftover_bitwidth, current_word, &word_offset, &t_diff, output_fd, &new_buf, &new_word);
+			if (!t_diff){
+				decode_large_t_diff(&t_diff_bitwidth, &bits_read, current_word, output_fd);
 			
 			} else {
-				if (!new_word && (t_diff < ((long long)1 << (t_diff_bitwidth - 1)))){
+				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
 					printf("t_diff_bitwidth--;\n");
 					t_diff_bitwidth--;
 				}

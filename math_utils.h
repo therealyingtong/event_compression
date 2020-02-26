@@ -13,7 +13,6 @@ long long read_bits_from_word(int64_t word, char bitwidth, char start_idx){
 }
 
 
-
 /* helper for name. adds a slash, hex file name and a termial 0 */
 char hexdigits[]="0123456789abcdef";
 void atohex(char* target,unsigned int v) {

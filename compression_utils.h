@@ -1,13 +1,8 @@
 #ifndef _COMPRESSION_UTILS_H
 #define _COMPRESSION_UTILS_H 1
 
-#include "compression_config.h"
-#include "compression_structs.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <sys/time.h>
-#include <time.h>
 #include "math_utils.h"
+#include <unistd.h>
 
 long long write_bits_to_buffer(long long bitstring, long *buffer, long *bits_written, char bitwidth){
 
@@ -38,6 +33,12 @@ long long write_bits_to_buffer(long long bitstring, long *buffer, long *bits_wri
 long long encode_t_diff(long long t_diff, char t_diff_bitwidth, long *outbuf2, long *bits_written, int output_fd2){
 
 	long long word = write_bits_to_buffer(t_diff, outbuf2, bits_written, t_diff_bitwidth);
+
+	if (word){
+		write(output_fd2, &word, 8);
+	} 
+
+	return word;
 
 }
 

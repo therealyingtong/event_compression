@@ -1,11 +1,9 @@
 #ifndef _DECOMPRESSION_UTILS_H
 #define _DECOMPRESSION_UTILS_H 1
 
-#include <stdlib.h>
-#include <stdio.h>
 #include "math_utils.h"
 
-long long read_bits_from_buffer(int64_t *current_word, long *bits_read, char bitwidth){
+long long read_bits_from_buffer(long long *current_word, long *bits_read, char bitwidth){
 	
 	char word_offset = *bits_read % 64; // start_idx in word
 	long long bitstring;
@@ -30,16 +28,14 @@ long long read_bits_from_buffer(int64_t *current_word, long *bits_read, char bit
 	return bitstring;
 }
 
-long long decode_t_diff(char *t_diff_bitwidth, long *bits_read, int64_t *current_word, int output_fd){
+long long decode_t_diff(char *t_diff_bitwidth, long *bits_read, long long *current_word, int output_fd){
 
 	long long t_diff = read_bits_from_buffer(current_word, bits_read, *t_diff_bitwidth);
 	return t_diff;
 
 }
 
-long long decode_large_t_diff(char *t_diff_bitwidth, long *bits_read, int64_t *current_word, int output_fd){
-
-	printf("decode_large_t_diff");
+long long decode_large_t_diff(char *t_diff_bitwidth, long *bits_read, long long *current_word, int output_fd){
 
 	char large_t_diff_bitwidth = read_bits_from_buffer(current_word, bits_read, (char) 8); // read new large bitwidth
 
