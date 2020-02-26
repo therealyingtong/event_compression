@@ -72,4 +72,33 @@ unsigned int overlay_correction[16]= {
 	MI2,MI2,0,0
 };
 
+/* helper to fill protocol bit tables  */
+void fill_protocol_bit_tables(
+	int protocol_idx,
+	int *type2datawidth, 
+	int *type3datawidth,
+	int *type2patterntable, 
+	int *type3patterntable,
+	int *statemask,
+	int *num_detectors
+){
+	type2datawidth = &protocol_list[protocol_idx].bits_per_entry_2;
+    type3datawidth= &protocol_list[protocol_idx].bits_per_entry_3;
+    type2patterntable = (int*)malloc(sizeof(int)* 
+				    protocol_list[protocol_idx].detector_entries);
+    type3patterntable = (int*)malloc(sizeof(int)*
+				    protocol_list[protocol_idx].detector_entries);
+    statemask = &protocol_list[protocol_idx].detector_entries-1; /* bitmask */
+    if (!type2patterntable | !type3patterntable) fprintf(stderr, "!type2patterntable | !type3patterntable");
+    /* fill pattern tables */
+    for (int i=0;i<protocol_list[protocol_idx].detector_entries;i++) {
+		type2patterntable[i]=protocol_list[protocol_idx].pattern2[i];
+		type3patterntable[i]=protocol_list[protocol_idx].pattern3[i];
+    };
+	
+    /* set number of detectors in case we are not in service mode */
+    if (protocol_idx) 
+	num_detectors = &protocol_list[protocol_idx].num_detectors;
+}
+
 #endif

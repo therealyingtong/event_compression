@@ -157,18 +157,20 @@ int main(int argc, char *argv[]){
 				// ll_to_bin(*current_word);
 
 				current_word++;
-				printf("words_read: %d\n", words_read);
+				printf("\n\n words_read: %d\n\n", words_read);
+				new_word = 0;
 			}
 
 			// 0. read next t_diff_bitwidth bits out of word
 			decode_t_diff(&t_diff_bitwidth, &bits_read, &leftover_bits, &leftover_bitwidth, current_word, &word_offset, &t_diff, output_fd, &new_buf, &new_word);
 			
 			// 1. adjust t_diff_bitwidth 
-			if (!t_diff){
+			if (!new_word && !t_diff){
 				decode_large_t_diff(&t_diff_bitwidth, &bits_read, &leftover_bits, &leftover_bitwidth, current_word, &word_offset, &t_diff, output_fd, &new_buf, &new_word);
 			
 			} else {
-				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
+				if (!new_word && (t_diff < ((long long)1 << (t_diff_bitwidth - 1)))){
+					printf("t_diff_bitwidth--;\n");
 					t_diff_bitwidth--;
 				}
 			}

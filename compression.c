@@ -68,15 +68,15 @@ int main(int argc, char *argv[]){
 			break;
 
 		case 'c':
-			if (sscanf(optarg, "%c", &clock_bitwidth) != 1){
+			if (sscanf(optarg, "%d", &clock_bitwidth) != 1){
 				fprintf(stderr, "clock_bitwidth sscanf: %s\n", strerror(errno));
 			} 
-				printf("%d\n", clock_bitwidth);
+				printf("clock_bitwidth: %d\n", clock_bitwidth);
 
 			break;
 
 		case 'd':
-			if (sscanf(optarg, "%c", &detector_bitwidth) != 1){
+			if (sscanf(optarg, "%d", &detector_bitwidth) != 1){
 				fprintf(stderr, "detector_bitwidth sscanf: %s\n", strerror(errno));
 			} 
 			break;
