@@ -34,7 +34,7 @@ int detcnts[16]; /* detector counts */
 int protocol_idx;
 
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
-long *outbuf2, *outbuf3; // output buffers pointers
+unsigned long long *outbuf2, *outbuf3; // output buffers pointers
 int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
 
 int main(int argc, char *argv[]){
@@ -92,8 +92,8 @@ int main(int argc, char *argv[]){
 	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock_bitwidth
 
 	// specify bitmasks for detector and clock
-	int64_t clock_bitmask = (((long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth); //leftmost bits
-	int64_t detector_bitmask = ((long long) 1 << detector_bitwidth) - 1; //rightmost bits
+	unsigned long long clock_bitmask = (((unsigned long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth); //leftmost bits
+	unsigned long long detector_bitmask = ((unsigned long long) 1 << detector_bitwidth) - 1; //rightmost bits
 
 	// initialise inbuf and current_event 
     fd_set fd_poll;  /* for polling */
@@ -101,8 +101,6 @@ int main(int argc, char *argv[]){
 	struct raw_event *inbuf; // input buffer pointer
 	inbuf = (struct raw_event *) malloc(inbuf_bitwidth);
 	if (!inbuf) exit(0);
-	char *active_pointer = (char *) inbuf;
-
 	struct raw_event *current_event;
 
 	int bytes_read, events_read;
@@ -160,16 +158,16 @@ int main(int argc, char *argv[]){
 		events_read = bytes_read/8; // each event is 64 bits aka 8 bytes
 		current_event = inbuf;
 
-		int64_t sendword2 = 0, sendword3; // full words to send to decoder
+		unsigned long long sendword2 = 0, sendword3; // full words to send to decoder
 
 		do {
 			// 0. read one value out of buffer
-			long long msw, lsw;
+			unsigned long long msw, lsw;
 			msw = current_event->msw; // most significant word
 			lsw = current_event->lsw; // least significant word
-			long long full_word = (msw << 32) | (lsw);
+			unsigned long long full_word = (msw << 32) | (lsw);
 
-			long long clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
+			unsigned long long clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
 
 			unsigned int detector_value = full_word & detector_bitmask;
 
@@ -187,11 +185,11 @@ int main(int argc, char *argv[]){
 
 			// 2. timestamp compression
 
-	    	long long t_diff = t_new - t_old; /* time difference */
+	    	unsigned long long t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 			ll_to_bin(t_diff);
 
-			if (t_diff + 1 > ((long long) 1 << t_diff_bitwidth)){
+			if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
 
 				// if t_diff is too large to contain
 				char large_t_diff_bitwidth = log2(t_diff) + 1;
@@ -204,7 +202,7 @@ int main(int argc, char *argv[]){
 			} else {
 				sendword2 = encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &bits_written, output_fd2);
 
-				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
+				if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
 					// if t_diff can be contained in a smaller bitwidth
 					t_diff_bitwidth--;
 				} else {

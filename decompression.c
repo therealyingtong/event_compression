@@ -78,25 +78,22 @@ int main(int argc, char *argv[]){
 	}
 
 	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock bitwidth
-	long long t_diff_bitmask = ((long long) 1 << t_diff_bitwidth) - 1; 
+	unsigned long long t_diff_bitmask = ((unsigned long long) 1 << t_diff_bitwidth) - 1; 
 
 	// initialise inbuf and current_word 
     fd_set fd_poll;  /* for polling */
 
-	int64_t *inbuf; // input buffer pointer
-	inbuf = (int64_t *) malloc(inbuf_bitwidth);
+	unsigned long long *inbuf; // input buffer pointer
+	inbuf = (unsigned long long *) malloc(inbuf_bitwidth);
 	if (!inbuf) exit(0);
-	char *active_pointer = (char *) inbuf;
-	char *active_free_pointer;
-
-	int64_t *current_word;
+	unsigned long long *current_word;
 
 	int bytes_read, words_read;
 
 	// initialise output buffers for output files
 	
 	outbuf = (unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
-    if (!outbuf) printf("outbuf2 malloc failed");
+    if (!outbuf) printf("outbuf malloc failed");
 
 	/* prepare input buffer settings for first read */
 	bytes_read = 0;
@@ -135,24 +132,25 @@ int main(int argc, char *argv[]){
 		words_read = bytes_read/8; // each word is 64 bits aka 8 bytes
 		current_word = inbuf;
 		long bits_read = 0; // counter for bits read in current buffer
-		long long t_diff = 0; // t_diffs to write to output file
 
 		do {
 
 			// 0. read next t_diff_bitwidth bits out of word
-			t_diff = decode_t_diff(&t_diff_bitwidth, &bits_read, current_word, output_fd);
-			ll_to_bin(t_diff);
+			unsigned long long t_diff = decode_t_diff(&t_diff_bitwidth, &bits_read, &current_word, output_fd);
 			
 			// 1. adjust t_diff_bitwidth 
 			if (!t_diff){
-				decode_large_t_diff(&t_diff_bitwidth, &bits_read, current_word, output_fd);
+				t_diff = decode_large_t_diff(&t_diff_bitwidth, &bits_read, &current_word, output_fd);
 			
 			} else {
-				if (t_diff < ((long long)1 << (t_diff_bitwidth - 1))){
-					printf("t_diff_bitwidth--;\n");
+				if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
 					t_diff_bitwidth--;
 				}
 			}
+
+			printf("t_diff: %lld\n", t_diff);
+			ll_to_bin(t_diff);
+			printf("words_read: %d\n", words_read);
 
 		} while(--words_read);		
 	}

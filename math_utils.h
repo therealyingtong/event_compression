@@ -1,14 +1,15 @@
 #ifndef _MATH_UTILS_H
 #define _MATH_UTILS_H 1
 
+#include <stdio.h>
 
-long long read_bits_from_word(int64_t word, char bitwidth, char start_idx){
+unsigned long long read_bits_from_word(unsigned long long word, char bitwidth, char start_idx){
 	// assume lsb on left, msb on right
 
-	long long bitmask = ((long long) 1 << bitwidth) - 1; // make bitmask for specified bitwidth
+	unsigned long long bitmask = ((unsigned long long) 1 << bitwidth) - 1; // make bitmask for specified bitwidth
 	char shift = 64 - bitwidth - start_idx;
-	long long shifted_bitmask = bitmask << shift;
-	long long bitstring = (word & shifted_bitmask) >> shift;
+	unsigned long long shifted_bitmask = bitmask << shift;
+	unsigned long long bitstring = (word & shifted_bitmask) >> shift;
 	return bitstring;
 }
 
@@ -22,7 +23,7 @@ void atohex(char* target,unsigned int v) {
     target[9]=0;
 }
 
-int ll_to_bin(long long n)
+int ll_to_bin(unsigned long long n)
 {
   int c, k;
   printf("%lld in binary is:\n", n);
