@@ -69,13 +69,25 @@ unsigned long long encode_t_diff(unsigned long long t_diff, char t_diff_bitwidth
 int encode_large_t_diff(unsigned long long t_diff, char t_diff_bitwidth, char large_t_diff_bitwidth, unsigned long long *outbuf2, long *bits_written, int output_fd2){
 
 	// write string of zeros of width t_diff_bitwidth
-	unsigned long long write1 = write_bits_to_buffer(0, outbuf2, bits_written, t_diff_bitwidth);
+	unsigned long long word1 = write_bits_to_buffer(0, outbuf2, bits_written, t_diff_bitwidth);
+
+	if (word1){
+		write(output_fd2, &word1, 8);
+	} 
 
 	// write large_t_diff_bitwidth in next byte
-	unsigned long long write2 = write_bits_to_buffer(large_t_diff_bitwidth, outbuf2, bits_written, (char) 8);
+	unsigned long long word2 = write_bits_to_buffer(large_t_diff_bitwidth, outbuf2, bits_written, (char) 8);
+
+	if (word2){
+		write(output_fd2, &word2, 8);
+	} 
 
 	// write t_diff in word of width large_t_diff_bitwidth
-	unsigned long long write3 = write_bits_to_buffer(t_diff, outbuf2, bits_written, large_t_diff_bitwidth);
+	unsigned long long word3 = write_bits_to_buffer(t_diff, outbuf2, bits_written, large_t_diff_bitwidth);
+
+	if (word3){
+		write(output_fd2, &word3, 8);
+	} 
 
 }
 
