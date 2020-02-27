@@ -30,11 +30,16 @@ OPTIONS:
 // global variables for I/O handling
 int input_fd, output_fd;
 char output_file[FNAMELENGTH] = "";
-unsigned int *outbuf;
+unsigned long long prev_buf_leftover; // leftover bits from previous buffer
+char prev_buf_leftover_bitwidth; //bitwidth of leftover bits from previous buffer
+char bufcounter = 1; // cuunter tracks which buffer we're reading from
+unsigned long long t_diff;
 
 int protocol_idx;
 
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
+long bits_read = 0; // counter for bits read 
+long bits_read_in_buf = 0;
 
 int main(int argc, char *argv[]){
 
@@ -79,6 +84,7 @@ int main(int argc, char *argv[]){
 
 	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock bitwidth
 	unsigned long long t_diff_bitmask = ((unsigned long long) 1 << t_diff_bitwidth) - 1; 
+	// unsigned long long t_diff;
 
 	// initialise inbuf and current_word 
     fd_set fd_poll;  /* for polling */
@@ -88,18 +94,10 @@ int main(int argc, char *argv[]){
 	if (!inbuf) exit(0);
 	unsigned long long *current_word;
 
-	int bytes_read, words_read;
-
-	// initialise output buffers for output files
-	
-	outbuf = (unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
-    if (!outbuf) printf("outbuf malloc failed");
+	int bytes_read;
 
 	/* prepare input buffer settings for first read */
 	bytes_read = 0;
-	words_read = 0;
-	current_word = inbuf;
-	int outbuf_offset = 0; // no. of bits offset in outbuf
 
 	// start adding raw words to inbuf
 	while (1) {
@@ -121,7 +119,6 @@ int main(int argc, char *argv[]){
 		}
 
 		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8);
-		// bytes_read = read(input_fd, inbuf, 8);
 
 		if (!bytes_read) continue; /* wait for next word */
 		if (bytes_read == -1) {
@@ -129,30 +126,30 @@ int main(int argc, char *argv[]){
 			break;
 		}
 
-		words_read = bytes_read/8; // each word is 64 bits aka 8 bytes
 		current_word = inbuf;
-		long bits_read = 0; // counter for bits read in current buffer
 
 		do {
 
-			// 0. read next t_diff_bitwidth bits out of word
-			unsigned long long t_diff = decode_t_diff(&t_diff_bitwidth, &bits_read, &current_word, output_fd);
+			// 0. rescue leftover bits from previous buffer
+
+			// 1. read next t_diff_bitwidth bits out of word
+			t_diff = decode_t_diff(&t_diff_bitwidth, &bits_read, &bits_read_in_buf, &current_word, output_fd, &prev_buf_leftover_bitwidth, &prev_buf_leftover);
 			
-			// 1. adjust t_diff_bitwidth 
+			// 2. adjust t_diff_bitwidth 
 			if (!t_diff){
-				t_diff = decode_large_t_diff(&t_diff_bitwidth, &bits_read, &current_word, output_fd);
-			
+				t_diff = decode_large_t_diff(&t_diff_bitwidth, &bits_read, &bits_read_in_buf, &current_word, output_fd, &prev_buf_leftover_bitwidth, &prev_buf_leftover);
+		
 			} else {
 				if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
 					t_diff_bitwidth--;
 				}
 			}
 
-			printf("t_diff: %lld\n", t_diff);
 			ll_to_bin(t_diff);
-			printf("words_read: %d\n", words_read);
+			printf("bits_read: %d\n", bits_read);
+			printf("bits_read_in_buf: %d\n", bits_read_in_buf);
 
-		} while(--words_read);		
+		} while(bits_read_in_buf <  INBUFENTRIES*8*8);		
 	}
 
 	// when inbuf is full, call processor()

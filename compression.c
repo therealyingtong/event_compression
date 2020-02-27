@@ -36,6 +36,10 @@ int protocol_idx;
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 unsigned long long *outbuf2, *outbuf3; // output buffers pointers
 int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
+long bits_written;
+char sendword; // bool to indicate whether word is full and should be written to outfile
+unsigned long long t_new, t_old; // for consistency checks
+
 
 int main(int argc, char *argv[]){
 
@@ -90,6 +94,9 @@ int main(int argc, char *argv[]){
 	// struct protocol *protocol = &protocol_list[protocol_idx];
 
 	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock_bitwidth
+	unsigned long long t_diff ;
+	unsigned long long clock_value;
+	unsigned int detector_value;
 
 	// specify bitmasks for detector and clock
 	unsigned long long clock_bitmask = (((unsigned long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth); //leftmost bits
@@ -107,12 +114,11 @@ int main(int argc, char *argv[]){
 
 	// initialise output buffers for type2 and type3 files
 	
-	outbuf2 = (unsigned int*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned int));
+	outbuf2 = (unsigned long long*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned long long));
     if (!outbuf2) printf("outbuf2 malloc failed");
-	outbuf3 = (unsigned int*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned int));
+	outbuf3 = (unsigned long long*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned long long*));
     if (!outbuf3) printf("outbuf3 malloc failed");
 
-	unsigned long long t_new, t_old; // for consistency checks
 
 	for (int i = 1 << detector_bitwidth; i; i--) detcnts[i] = 0; /* clear histogram */
 
@@ -121,11 +127,12 @@ int main(int argc, char *argv[]){
     /* prepare input buffer settings for first read */
 	bytes_read = 0;
 	events_read = 0;
-	current_event = inbuf;
-
+	// current_event = inbuf;
     t_old = 0;
-
-	long bits_written = 0;
+	bits_written = 0;
+	sendword = 0; // bool to indicate whether word is full and should be written to outfile
+	unsigned long long msw, lsw;
+	unsigned long long full_word;
 
 	// start adding raw events to inbuf
 	while (1) {
@@ -147,29 +154,25 @@ int main(int argc, char *argv[]){
 		}
 
 		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8);
-		// bytes_read = read(input_fd, inbuf, 8);
 
 		if (!bytes_read) continue; /* wait for next event */
 		if (bytes_read == -1) {
 			fprintf(stderr,"error on read: %d\n",errno);
 			break;
 		}
-
 		events_read = bytes_read/8; // each event is 64 bits aka 8 bytes
 		current_event = inbuf;
 
-		unsigned long long sendword2 = 0, sendword3; // full words to send to decoder
-
 		do {
 			// 0. read one value out of buffer
-			unsigned long long msw, lsw;
+			
 			msw = current_event->msw; // most significant word
 			lsw = current_event->lsw; // least significant word
-			unsigned long long full_word = (msw << 32) | (lsw);
+			full_word = (msw << 32) | (lsw);
 
-			unsigned long long clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
+			clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
 
-			unsigned int detector_value = full_word & detector_bitmask;
+			detector_value = full_word & detector_bitmask;
 
 			// 1. consistency checks
 
@@ -184,9 +187,9 @@ int main(int argc, char *argv[]){
 			}
 
 			// 2. timestamp compression
-
-	    	unsigned long long t_diff = t_new - t_old; /* time difference */
+	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
+
 			ll_to_bin(t_diff);
 
 			if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
@@ -194,23 +197,22 @@ int main(int argc, char *argv[]){
 				// if t_diff is too large to contain
 				char large_t_diff_bitwidth = log2(t_diff) + 1;
 
-				sendword2 = encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &bits_written, output_fd2);
+				encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &bits_written, &sendword, output_fd2);
 
 				t_diff_bitwidth = large_t_diff_bitwidth;
-				// printf("increase\n");
 
 			} else {
-				sendword2 = encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &bits_written, output_fd2);
+				encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &bits_written, &sendword, output_fd2);
 
 				if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
 					// if t_diff can be contained in a smaller bitwidth
 					t_diff_bitwidth--;
+
 				} else {
 					// printf("stay the same\n");
 				}
 
 			}
-
 			current_event++;
 
 		} while(--events_read);		
