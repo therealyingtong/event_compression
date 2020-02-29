@@ -30,7 +30,7 @@ OPTIONS:
 // global variables for I/O handling
 int input_fd, output_fd;
 unsigned char output_file[FNAMELENGTH] = "";
-unsigned long long prev_buf_leftover = 0; // leftover bits from previous buffer
+unsigned long long prev_buf_leftover; // leftover bits from previous buffer
 unsigned char prev_buf_leftover_bitwidth; //bitwidth of leftover bits from previous buffer
 unsigned char overlap_bitwidth; // bitwidth of overlap into next buffer
 unsigned char bufcounter = 1; // counter tracks which buffer we're reading from
@@ -41,21 +41,6 @@ int protocol_idx;
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 long bits_read = 0; // counter for bits read 
 long bits_read_in_buf = 0;
-unsigned long long *current_word;
-
-unsigned long long rescue_bits(){
-	unsigned long long first_part_bitstring = prev_buf_leftover;
-
-	unsigned long long second_part_bitstring = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, overlap_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
-
-	unsigned long long rescued = (first_part_bitstring << overlap_bitwidth) | second_part_bitstring;
-
-	// bits_read_in_buf = 0;
-	prev_buf_leftover = 0;
-	prev_buf_leftover_bitwidth = 0;
-
-	return rescued;
-}
 
 int main(int argc, unsigned char *argv[]){
 
@@ -108,6 +93,7 @@ int main(int argc, unsigned char *argv[]){
 	unsigned long long *inbuf; // input buffer pointer
 	inbuf = (unsigned long long *) malloc(inbuf_bitwidth);
 	if (!inbuf) exit(0);
+	unsigned long long *current_word;
 
 	int bytes_read;
 
@@ -119,9 +105,6 @@ int main(int argc, unsigned char *argv[]){
 
 	// start adding raw words to inbuf
 	while (1) {
-
-		if (!inbuf) exit(0);
-
 
 		// bufcounter++;
 
@@ -154,80 +137,107 @@ int main(int argc, unsigned char *argv[]){
 
 		do {
 
-			if (bits_read == 0){
+			ll_to_bin(*current_word);
 
-				printf("first word in first buffer\n");
-				t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
-				 
-			} else {
-				unsigned long long rescued = 0;
+			if (prev_buf_leftover_bitwidth > 0) {
 
-				if (prev_buf_leftover_bitwidth > 0){
-					printf("rescuing bits\n");
-					rescued = rescue_bits();
+				// overlap from previous buffer
 
-					if (increase_bitwidth > 0){
+				// printf("current_word: ");
+				// ll_to_bin(*current_word);
 
-						printf("increase_bitwidth > 0\n");
+				// printf("the first word of this buffer has some leftover bits in the previous buffer\n");
 
-						t_diff_bitwidth = rescued;
+				unsigned long long first_part_bitstring = prev_buf_leftover;
 
-						t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+				bits_read_in_buf = 0;
 
-						if (prev_buf_leftover_bitwidth > 0){
-							increase_bitwidth = 0;
-							continue;
-						}
-		
-					} else if (increase_bitwidth == 0) {
+				unsigned long long second_part_bitstring = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, overlap_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
-						printf("increase_bitwidth == 0\n");
+				if (increase_bitwidth){
+					// printf("increase_bitwidth across buffer\n");
+					t_diff_bitwidth = (first_part_bitstring << overlap_bitwidth) | second_part_bitstring;
+					increase_bitwidth = 0;
 
-						t_diff = rescued;
-					}
-
-				} else {
+					// printf("t_diff_bitwidth better not be zero: %d\n", t_diff_bitwidth);
 
 					t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
-					if (prev_buf_leftover_bitwidth > 0){
-						increase_bitwidth = 0;
-						continue;
-					}
+					// printf("t_diff:\n");
+					// ll_to_bin(t_diff);
+
+				} else {
+					t_diff = (first_part_bitstring << overlap_bitwidth) | second_part_bitstring;
+					// printf("t_diff:\n");
+					// ll_to_bin(t_diff);
 
 				}
 
-				if (t_diff == 0){
+				prev_buf_leftover_bitwidth = 0;
 
+			} else {
+
+				if (increase_bitwidth){
+					t_diff_bitwidth = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, 8, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);	
+
+					t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);	
+
+					increase_bitwidth = 0;	
+
+				} else {
+					t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+
+				}
+
+
+				// printf("no leftover from prev buffer\n");
+
+
+				// printf("t_diff_bitwidth: %d\n", t_diff_bitwidth);
+				// printf("t_diff:\n");
+				// ll_to_bin(t_diff);
+
+			} 
+
+			// printf("t_diff before if statements: %lld\n", t_diff);
+
+			if (t_diff == 0){
 				// all zeros, meaning we increased bitwidth
 				// printf("increase_bitwidth \n");
 
-					t_diff_bitwidth = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, 8, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+				t_diff_bitwidth = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, 8, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
-					if (prev_buf_leftover_bitwidth > 0){
-						increase_bitwidth = 1;
-						continue;
-					} 
+				printf("t_diff_bitwidth better not be zero: %d\n", t_diff_bitwidth);
 
-					t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
-					if (prev_buf_leftover_bitwidth > 0){
-						increase_bitwidth = 0;
-						continue;
-					}
-					
+				if (prev_buf_leftover_bitwidth > 0){
+
+					increase_bitwidth = 1;
+
+					// printf("large_t_diff_bitwidth == 1, which means the bits encoding the increased bitwidth size span two buffers\n");
+
+					continue;
 				}
-	 
+
+				increase_bitwidth = 0;
+
+				t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+
+
 			} 
 			
-			// we got a t_diff, check if we need to decrease bitwidth
-			ll_to_bin(t_diff);
-			if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
-				t_diff_bitwidth--;
-			}
+			// else {
+				// we got a t_diff, check if we need to decrease bitwidth
+				// ll_to_bin(t_diff);
+				if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
+					t_diff_bitwidth--;
+				}
+			// }
 
-		} while(prev_buf_leftover_bitwidth == 0);		
-		// } while((bits_read_in_buf + t_diff_bitwidth) < INBUFENTRIES*8*8);		
+			// printf("bufcounter: %d\n", bufcounter);
+
+		} while((bits_read + t_diff_bitwidth <= bufcounter * INBUFENTRIES*8*8) && bufcounter < 3);		
+		// } while((bits_read_in_buf + t_diff_bitwidth < INBUFENTRIES*8*8));		
 
 	}
 

@@ -27,8 +27,8 @@ OPTIONS:
 
 // global variables for I/O handling
 int input_fd, output_fd2, output_fd3; // input and output file descriptors
-char type2_file[FNAMELENGTH] = "";
-char type3_file[FNAMELENGTH] = "";
+unsigned char type2_file[FNAMELENGTH] = "";
+unsigned char type3_file[FNAMELENGTH] = "";
 
 int detcnts[16]; /* detector counts */
 int protocol_idx;
@@ -37,15 +37,15 @@ int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input bu
 unsigned long long *outbuf2, *outbuf3; // output buffers pointers
 int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
 long bits_written;
-char sendword; // bool to indicate whether word is full and should be written to outfile
+unsigned char sendword; // bool to indicate whether word is full and should be written to outfile
 unsigned long long t_new, t_old; // for consistency checks
 
 
-int main(int argc, char *argv[]){
+int main(int argc, unsigned char *argv[]){
 
-	char clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and detector value
+	unsigned char clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and detector value
 
-	char input_file[FNAMELENGTH] = "";
+	unsigned char input_file[FNAMELENGTH] = "";
 	int *type2patterntable, *type3patterntable; /* for protocol */
 
 	// parse options
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]){
 	// // protocol details
 	// struct protocol *protocol = &protocol_list[protocol_idx];
 
-	char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock_bitwidth
+	unsigned char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock_bitwidth
 	unsigned long long t_diff ;
 	unsigned long long clock_value;
 	unsigned int detector_value;
@@ -173,29 +173,29 @@ int main(int argc, char *argv[]){
 			clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
 
 			detector_value = full_word & detector_bitmask;
-
-			// 1. consistency checks
-
-			// 1a) trap negative time differences
 		    t_new = clock_value; /* get event time */
-		    if (t_new < t_old ) { /* negative time difference */
-				if ((t_new-t_old) & 0x1000000000000ll) { /* check rollover */
-		    		current_event++;
-		    		continue; /* ...are ignored */
-				}
-				fprintf(stderr, "negative time difference: point 2, old: %llx, new: %llx\n", t_old,t_new);
-			}
+
+			// // 1. consistency checks
+
+			// // 1a) trap negative time differences
+		    // if (t_new < t_old ) { /* negative time difference */
+			// 	if ((t_new-t_old) & 0x1000000000000ll) { /* check rollover */
+		    // 		current_event++;
+		    // 		continue; /* ...are ignored */
+			// 	}
+			// 	fprintf(stderr, "negative time difference: point 2, old: %llx, new: %llx\n", t_old,t_new);
+			// }
 
 			// 2. timestamp compression
 	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 
-			ll_to_bin(t_diff);
+			// ll_to_bin(t_diff);
 
 			if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
 
 				// if t_diff is too large to contain
-				char large_t_diff_bitwidth = log2(t_diff) + 1;
+				unsigned char large_t_diff_bitwidth = log2(t_diff) + 1;
 
 				encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &bits_written, &sendword, output_fd2);
 
