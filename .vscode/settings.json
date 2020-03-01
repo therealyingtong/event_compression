@@ -4,6 +4,8 @@
 		"compression_config.h": "c",
 		"compression_utils.h": "c",
 		"decompression_utils.h": "c",
-		"select.h": "c"
+		"select.h": "c",
+		"math.h": "c",
+		"read_utils.h": "c"
 	}
 }

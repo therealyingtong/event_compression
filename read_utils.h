@@ -1,15 +1,12 @@
-#ifndef _DECOMPRESSION_UTILS_H
-#define _DECOMPRESSION_UTILS_H 1
+#ifndef _READ_UTILS_H
+#define _READ_UTILS_H 1
 
-#include "compression_config.h"
 #include "math_utils.h"
 
-unsigned long long read_bits_from_buffer(unsigned long long **current_word, long *bits_read, long *bits_read_in_buf, unsigned char bitwidth, unsigned char *prev_buf_leftover_bitwidth, unsigned char *overlap_bitwidth, unsigned long long *prev_buf_leftover, unsigned char *bufcounter){
+unsigned long long read_bits_from_buffer(unsigned long long **current_word, long *bits_read, long *bits_read_in_buf, unsigned char bitwidth, unsigned char *prev_buf_leftover_bitwidth, unsigned char *overlap_bitwidth, unsigned long long *prev_buf_leftover, unsigned char *bufcounter, int bufsize){
 
 	unsigned char word_offset = *bits_read % 64; // start_idx in word
 	unsigned long long bitstring = 1;
-
-	int bufsize = INBUFENTRIES * 8 * 8;
 
 	if ((*bits_read_in_buf + bitwidth) >= bufsize){
 

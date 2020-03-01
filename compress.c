@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <sys/select.h>
 
-#include "compression_utils.h"
+#include "write_utils.h"
 #include "compression_structs.h"
 #include "compression_config.h"
 
@@ -33,7 +33,7 @@ unsigned char detector_file[FNAMELENGTH] = "";
 int detcnts[16]; /* detector counts */
 int protocol_idx;
 
-int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
+int inbuf_bytes = INBUFENTRIES * 8; // number of bytes to allocate to input buffer
 unsigned long long *outbuf2, *outbuf3; // output buffers pointers
 int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
 long timestamp_bits_written, detector_bits_written;
@@ -107,7 +107,7 @@ int main(int argc, unsigned char *argv[]){
     fd_set fd_poll;  /* for polling */
 
 	struct raw_event *inbuf; // input buffer pointer
-	inbuf = (struct raw_event *) malloc(inbuf_bitwidth);
+	inbuf = (struct raw_event *) malloc(inbuf_bytes);
 	if (!inbuf) exit(0);
 	struct raw_event *current_event;
 
@@ -182,7 +182,7 @@ int main(int argc, unsigned char *argv[]){
 	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 
-			ll_to_bin(t_diff);
+			// ll_to_bin(t_diff);
 
 			if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
 

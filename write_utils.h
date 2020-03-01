@@ -1,5 +1,5 @@
-#ifndef _COMPRESSION_UTILS_H
-#define _COMPRESSION_UTILS_H 1
+#ifndef _WRITE_UTILS_H
+#define _WRITE_UTILS_H 1
 
 #include "math_utils.h"
 #include <unistd.h>

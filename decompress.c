@@ -1,14 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <stdint.h>
 #include <sys/select.h>
-#include <math.h>
 
-#include "decompression_utils.h"
+#include "read_utils.h"
 #include "compression_structs.h"
 #include "compression_config.h"
 
@@ -38,7 +35,8 @@ unsigned long long value;
 
 int protocol_idx = 1;
 char dynamic = 0;
-int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
+int inbuf_bytes = INBUFENTRIES * 8; // number of bytes to allocate to input buffer
+int inbuf_bits = INBUFENTRIES * 8 * 8;
 long bits_read = 0; // counter for bits read 
 long bits_read_in_buf = 0;
 unsigned long long *current_word;
@@ -46,7 +44,7 @@ unsigned long long *current_word;
 unsigned long long rescue_bits(){
 	unsigned long long first_part_bitstring = prev_buf_leftover;
 
-	unsigned long long second_part_bitstring = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, overlap_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+	unsigned long long second_part_bitstring = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, overlap_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 
 	unsigned long long rescued = (first_part_bitstring << overlap_bitwidth) | second_part_bitstring;
 
@@ -103,7 +101,7 @@ int main(int argc, unsigned char *argv[]){
     fd_set poll;  /* for polling */
 
 	unsigned long long *inbuf; // input buffer pointer
-	inbuf = (unsigned long long *) malloc(inbuf_bitwidth);
+	inbuf = (unsigned long long *) malloc(inbuf_bytes);
 	if (!inbuf) exit(0);	
 
 	int bytes_read;
@@ -152,7 +150,7 @@ int main(int argc, unsigned char *argv[]){
 			if (bits_read == 0){
 
 				printf("first word in first buffer\n");
-				value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+				value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 				 
 			} else {
 				unsigned long long rescued = 0;
@@ -167,7 +165,7 @@ int main(int argc, unsigned char *argv[]){
 
 						bitwidth = rescued;
 
-						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 
 						if (prev_buf_leftover_bitwidth > 0){
 							increase_bitwidth = 0;
@@ -183,7 +181,7 @@ int main(int argc, unsigned char *argv[]){
 
 				} else {
 
-					value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+					value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 
 					if (prev_buf_leftover_bitwidth > 0){
 						increase_bitwidth = 0;
@@ -198,14 +196,14 @@ int main(int argc, unsigned char *argv[]){
 					// all zeros, meaning we increased bitwidth
 					// printf("increase_bitwidth \n");
 
-						bitwidth = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, 8, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+						bitwidth = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, 8, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 
 						if (prev_buf_leftover_bitwidth > 0){
 							increase_bitwidth = 1;
 							continue;
 						} 
 
-						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 
 						if (prev_buf_leftover_bitwidth > 0){
 							increase_bitwidth = 0;
@@ -218,6 +216,7 @@ int main(int argc, unsigned char *argv[]){
 			} 
 
 			ll_to_bin(value);
+			write(output_fd, &value, 8);
 
 			if (dynamic){
 				// we got a value, check if we need to decrease bitwidth
