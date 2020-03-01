@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
 #include <sys/select.h>
 
 #include "read_utils.h"

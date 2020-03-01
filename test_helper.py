@@ -38,10 +38,17 @@ def run_sub_process(command, timelimit = 5):
 	log("\n Done \n ")
 
 def compress(readevent_file, compressed_timestamp_file, compressed_detector_file, clock_bitwidth, detector_bitwidth, protocol):
-    log("\n compressing ", readevent_file)
-    log("at :"+ readevent_file)
+    log("\n compressing " + readevent_file)
     compress_command = "./compress -i " + readevent_file + " -o " + compressed_timestamp_file + " -O " + compressed_detector_file + " -c " + clock_bitwidth + " -d " + detector_bitwidth + " -p " + protocol
     run_sub_process(compress_command)
 
-def decompress(compressed_file):
-    log("\n decompressing ", compressed_file)
+def decompress(compressed_file, decompressed_file, init_bitwidth, protocol, dynamic):
+	log("\n decompressing " + compressed_file)
+	decompress_command = "./decompress -i " + compressed_file + " -o " + decompressed_file + " -b " + init_bitwidth + " -p " + protocol
+	if (dynamic): decompress_command += " -d "
+	run_sub_process(decompress_command)
+
+def recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file):
+	log("\n recombining " + decompressed_timestamp_file + " and " + decompressed_detector_file)
+	recombine_command = "python3 recombine.py " + decompressed_timestamp_file + " " + decompressed_detector_file + " " + clock_bitwidth + " " + detector_bitwidth + " " + recombined_file
+	run_sub_process(recombine_command)

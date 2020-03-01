@@ -4,6 +4,12 @@ import sys
 # parameters
 compressed_timestamp_file = "./compressed_timestamp"
 compressed_detector_file = "./compressed_detector"
+decompressed_timestamp_file = "./decompressed_timestamp"
+decompressed_detector_file = "./decompressed_detector"
+recombined_file = "./recombined"
+
+readevent_file = sys.argv[1]
+
 clock_bitwidth = "49"
 detector_bitwidth = "4"
 protocol = "1"
@@ -12,7 +18,6 @@ protocol = "1"
 # execution time
 
 # 1. compress file
-readevent_file = sys.argv[1]
 
 print("original file checksum: ", test_helper.md5sum(readevent_file))
 
@@ -37,10 +42,16 @@ print("compression ratio: ", original_file_size / compressed_file_size)
 
 # 2. decompress file
 # decompress timestamp differences
-# add up timestamp differences to recover timestamps
+test_helper.decompress(compressed_timestamp_file, decompressed_timestamp_file, clock_bitwidth, protocol, 1)
+
 # decompress detector
+test_helper.decompress(compressed_detector_file, decompressed_detector_file, detector_bitwidth, protocol, 0)
+
 # recombine decompressed timestamp and detector
+test_helper.recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file)
+
 # recombined file checksum
+print("recombined file checksum: ", test_helper.md5sum(recombined_file))
 
 # 3. test
 # assert original file checksum == recombined file checksum
