@@ -17,8 +17,8 @@ usage:
 
 OPTIONS:
 	-i input_stream: stream to read raw events from
-	-o output_file: file to write type2 compressed chunks to
-	-O output_file: file to write type3 compressed chunks to
+	-o timestamp_file: file to write compressed timestamps to
+	-O detector_file: file to write detector patterns to
 	-c clock_bitwidth: number of bits used to represent a timestamp
 	-d detector_bitwidth: number of bits used to represent a detector
 	-p protocol: string indicating protocol to be used
@@ -26,9 +26,9 @@ OPTIONS:
 */
 
 // global variables for I/O handling
-int input_fd, output_fd2, output_fd3; // input and output file descriptors
-unsigned char type2_file[FNAMELENGTH] = "";
-unsigned char type3_file[FNAMELENGTH] = "";
+int input_fd, timestamp_fd, detector_fd; // input and output file descriptors
+unsigned char timestamp_file[FNAMELENGTH] = "";
+unsigned char detector_file[FNAMELENGTH] = "";
 
 int detcnts[16]; /* detector counts */
 int protocol_idx;
@@ -36,8 +36,8 @@ int protocol_idx;
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 unsigned long long *outbuf2, *outbuf3; // output buffers pointers
 int outbuf2_offset, outbuf3_offset; // offset from right of output buffers
-long bits_written;
-unsigned char sendword; // bool to indicate whether word is full and should be written to outfile
+long timestamp_bits_written, detector_bits_written;
+unsigned char timestamp_sendword, detector_sendword; // bool to indicate whether word is full and should be written to outfile
 unsigned long long t_new, t_old; // for consistency checks
 
 
@@ -58,16 +58,16 @@ int main(int argc, unsigned char *argv[]){
 			if (input_fd == -1) fprintf(stderr, "input_fd open: %s\n", strerror(errno));
 			break;
 
-		case 'o': // outfile2 name and type
-			sscanf(optarg, FNAMEFORMAT, type2_file);
-			output_fd2 = open(type2_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
-			if (output_fd2 == -1) fprintf(stderr, "output_fd2 open: %s\n", strerror(errno));
+		case 'o': // timestamp_file name and type
+			sscanf(optarg, FNAMEFORMAT, timestamp_file);
+			timestamp_fd = open(timestamp_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
+			if (timestamp_fd == -1) fprintf(stderr, "timestamp_fd open: %s\n", strerror(errno));
 			break;
 
 	    case 'O': /* outfile3 name and type */
-			sscanf(optarg, FNAMEFORMAT, type3_file);
-			output_fd3 = open(type3_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
-			if (output_fd3 == -1) fprintf(stderr, "output_fd3 open: %s\n", strerror(errno));
+			sscanf(optarg, FNAMEFORMAT, detector_file);
+			detector_fd = open(detector_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
+			if (detector_fd == -1) fprintf(stderr, "detector_fd open: %s\n", strerror(errno));
 			break;
 
 		case 'c':
@@ -96,10 +96,11 @@ int main(int argc, unsigned char *argv[]){
 	unsigned char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock_bitwidth
 	unsigned long long t_diff ;
 	unsigned long long clock_value;
-	unsigned int detector_value;
+	unsigned long long detector_value;
 
 	// specify bitmasks for detector and clock
 	unsigned long long clock_bitmask = (((unsigned long long) 1 << clock_bitwidth) - 1) << (64 - clock_bitwidth); //leftmost bits
+
 	unsigned long long detector_bitmask = ((unsigned long long) 1 << detector_bitwidth) - 1; //rightmost bits
 
 	// initialise inbuf and current_event 
@@ -114,7 +115,7 @@ int main(int argc, unsigned char *argv[]){
 
 	// initialise output buffers for type2 and type3 files
 	
-	outbuf2 = (unsigned long long*)malloc(TYPE2_BUFFERSIZE*sizeof(unsigned long long));
+	outbuf2 = (unsigned long long*)calloc(TYPE2_BUFFERSIZE,sizeof(unsigned long long));
     if (!outbuf2) printf("outbuf2 malloc failed");
 	outbuf3 = (unsigned long long*)malloc(TYPE3_BUFFERSIZE*sizeof(unsigned long long*));
     if (!outbuf3) printf("outbuf3 malloc failed");
@@ -129,8 +130,8 @@ int main(int argc, unsigned char *argv[]){
 	events_read = 0;
 	// current_event = inbuf;
     t_old = 0;
-	bits_written = 0;
-	sendword = 0; // bool to indicate whether word is full and should be written to outfile
+	timestamp_bits_written = 0;
+	timestamp_sendword = 0; // bool to indicate whether word is full and should be written to outfile
 	unsigned long long msw, lsw;
 	unsigned long long full_word;
 
@@ -172,37 +173,28 @@ int main(int argc, unsigned char *argv[]){
 
 			clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
 
-			detector_value = full_word & detector_bitmask;
+			detector_value = full_word & detector_bitmask; /* get detector pattern */
+			encode_bitstring(detector_value, detector_bitwidth, outbuf3, &detector_bits_written, &detector_sendword, detector_fd);
+
 		    t_new = clock_value; /* get event time */
-
-			// // 1. consistency checks
-
-			// // 1a) trap negative time differences
-		    // if (t_new < t_old ) { /* negative time difference */
-			// 	if ((t_new-t_old) & 0x1000000000000ll) { /* check rollover */
-		    // 		current_event++;
-		    // 		continue; /* ...are ignored */
-			// 	}
-			// 	fprintf(stderr, "negative time difference: point 2, old: %llx, new: %llx\n", t_old,t_new);
-			// }
 
 			// 2. timestamp compression
 	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 
-			// ll_to_bin(t_diff);
+			ll_to_bin(t_diff);
 
 			if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
 
 				// if t_diff is too large to contain
 				unsigned char large_t_diff_bitwidth = log2(t_diff) + 1;
 
-				encode_large_t_diff(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &bits_written, &sendword, output_fd2);
+				encode_large_bitstring(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
 
 				t_diff_bitwidth = large_t_diff_bitwidth;
 
 			} else {
-				encode_t_diff(t_diff, t_diff_bitwidth, outbuf2, &bits_written, &sendword, output_fd2);
+				encode_bitstring(t_diff, t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
 
 				if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
 					// if t_diff can be contained in a smaller bitwidth

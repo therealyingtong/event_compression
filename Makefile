@@ -1,7 +1,7 @@
-all: compression decompression
+all: compress decompress
 
-compression: compression.c compression_utils.h
-	gcc -w -O3 -o compression compression.c -lm
+compress: compress.c compression_utils.h
+	gcc -w -O3 -o compress compress.c -lm
 
-decompression: decompression.c decompression_utils.h
-	gcc -w -O3 -o decompression decompression.c -lm
+decompress: decompress.c decompression_utils.h
+	gcc -w -O3 -o decompress decompress.c -lm

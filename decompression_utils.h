@@ -13,10 +13,7 @@ unsigned long long read_bits_from_buffer(unsigned long long **current_word, long
 
 	if ((*bits_read_in_buf + bitwidth) >= bufsize){
 
-		printf("omg. buffer overlap! \n");
-
 		(*bufcounter)++;
-		printf("*bufcounter: %d\n", *bufcounter);
 
 		// overlap into next buffer
 		*overlap_bitwidth = word_offset + bitwidth - 64;
@@ -27,9 +24,6 @@ unsigned long long read_bits_from_buffer(unsigned long long **current_word, long
 		*bits_read_in_buf = 0;
 		*bits_read = *bits_read + 64 - word_offset;	
 
-		printf("bits_read: %d\n", *bits_read);
-		printf("bits_read_in_buf: %d\n", *bits_read_in_buf);
-
 	} else if (word_offset + bitwidth >= 64){
 
 		// overlap into next word
@@ -38,7 +32,7 @@ unsigned long long read_bits_from_buffer(unsigned long long **current_word, long
 		unsigned long long first_part_bitstring = read_bits_from_word(**current_word, 64 - word_offset, word_offset);
 
 		(*current_word)++; // read next word
-		printf("(*current_word)++;\n");
+		// ll_to_bin(**current_word);
 	
 		unsigned long long second_part_bitstring = read_bits_from_word(**current_word, overlap_bitwidth, 0);
 
@@ -47,19 +41,12 @@ unsigned long long read_bits_from_buffer(unsigned long long **current_word, long
 		*bits_read = *bits_read + bitwidth;	
 		*bits_read_in_buf = *bits_read_in_buf + bitwidth;
 
-		printf("bits_read: %d\n", *bits_read);
-		printf("bits_read_in_buf: %d\n", *bits_read_in_buf);
-
 	} else {
-		printf("directly read bitstring\n");
 
 		bitstring = read_bits_from_word(**current_word, bitwidth, word_offset);
 
 		*bits_read = *bits_read + bitwidth;	
 		*bits_read_in_buf = *bits_read_in_buf + bitwidth;
-
-		printf("bits_read: %d\n", *bits_read);
-		printf("bits_read_in_buf: %d\n", *bits_read_in_buf);
 
 	}
 

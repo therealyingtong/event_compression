@@ -20,9 +20,9 @@ usage:
 OPTIONS:
 	-i input_stream: stream to read compressed words from
 	-o output_file: file to write decompressed words to
-	-c clock_bitwidth: initial number of bits used to represent a timestamp
-	-d detector_bitwidth: number of bits used to represent a detector
+	-b init_bitwidth: initial number of bits used to represent a value
 	-p protocol: string indicating protocol to be used
+	-d dynamic: boolean indicating whether or not to change init_bitwidth
 
 */
 
@@ -34,10 +34,10 @@ unsigned long long prev_buf_leftover = 0; // leftover bits from previous buffer
 unsigned char prev_buf_leftover_bitwidth; //bitwidth of leftover bits from previous buffer
 unsigned char overlap_bitwidth; // bitwidth of overlap into next buffer
 unsigned char bufcounter = 1; // counter tracks which buffer we're reading from
-unsigned long long t_diff;
+unsigned long long value;
 
-int protocol_idx;
-
+int protocol_idx = 1;
+char dynamic = 0;
 int inbuf_bitwidth = INBUFENTRIES * 8; // number of bits to allocate to input buffer
 long bits_read = 0; // counter for bits read 
 long bits_read_in_buf = 0;
@@ -60,11 +60,11 @@ unsigned long long rescue_bits(){
 int main(int argc, unsigned char *argv[]){
 
 	unsigned char input_file[FNAMELENGTH] = "";
-	unsigned char clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and detector value
+	unsigned char init_bitwidth; // width (in bits) of init value
 
 	// parse options
 	int opt;
-	while((opt = getopt(argc, argv, "i:o:c:d:p:")) != EOF){
+	while((opt = getopt(argc, argv, "i:o:b:p:d")) != EOF){
 		switch(opt){
 		case 'i':
 			sscanf(optarg, FNAMEFORMAT, input_file);
@@ -75,18 +75,12 @@ int main(int argc, unsigned char *argv[]){
 		case 'o': // outfile name and type
 			sscanf(optarg, FNAMEFORMAT, output_file);
 			output_fd = open(output_file, O_WRONLY|O_CREAT|O_TRUNC,FILE_PERMISSIONS);
-			if (output_fd == -1) fprintf(stderr, "output_fd2 open: %s\n", strerror(errno));
+			if (output_fd == -1) fprintf(stderr, "output_fd open: %s\n", strerror(errno));
 			break;
 
-		case 'c':
-			if (sscanf(optarg, "%d", &clock_bitwidth) != 1){
-				fprintf(stderr, "clock_bitwidth sscanf: %s\n", strerror(errno));
-			} 
-			break;
-
-		case 'd':
-			if (sscanf(optarg, "%d", &detector_bitwidth) != 1){
-				fprintf(stderr, "detector_bitwidth sscanf: %s\n", strerror(errno));
+		case 'b':
+			if (sscanf(optarg, "%d", &init_bitwidth) != 1){
+				fprintf(stderr, "init_bitwidth sscanf: %s\n", strerror(errno));
 			} 
 			break;
 
@@ -95,19 +89,22 @@ int main(int argc, unsigned char *argv[]){
 				fprintf(stderr, "protocol sscanf: %s\n", strerror(errno));
 			} 
 			break;
+
+		case 'd':
+			dynamic = 1;
+			break;
 		}
 	}
 
-	unsigned char t_diff_bitwidth = clock_bitwidth; // initialise t_diff_bitwidth to clock bitwidth
-	unsigned long long t_diff_bitmask = ((unsigned long long) 1 << t_diff_bitwidth) - 1; 
-	// unsigned long long t_diff;
+	unsigned char bitwidth = init_bitwidth; // initialise bitwidth to init bitwidth
+	unsigned long long value_bitmask = ((unsigned long long) 1 << bitwidth) - 1; 
 
 	// initialise inbuf and current_word 
-    fd_set fd_poll;  /* for polling */
+    fd_set poll;  /* for polling */
 
 	unsigned long long *inbuf; // input buffer pointer
 	inbuf = (unsigned long long *) malloc(inbuf_bitwidth);
-	if (!inbuf) exit(0);
+	if (!inbuf) exit(0);	
 
 	int bytes_read;
 
@@ -115,33 +112,29 @@ int main(int argc, unsigned char *argv[]){
 	bytes_read = 0;
 	unsigned char bufcounter = 1;
 
-	unsigned char increase_bitwidth = 0; // flag to indicate if next read is to increase bitwidth (instead of a normal timestamp read)
+	unsigned char increase_bitwidth = 0; // flag to indicate if next read is to increase bitwidth (instead of a normal value read)
 
 	// start adding raw words to inbuf
 	while (1) {
 
-		if (!inbuf) exit(0);
-
-
-		// bufcounter++;
-
 		// wait for data on input_fd
 
-		FD_ZERO(&fd_poll); FD_SET(input_fd, &fd_poll);
+		FD_ZERO(&poll); FD_SET(input_fd, &poll);
 		timeout.tv_usec = RETRYREADWAIT; timeout.tv_sec = 0;
 
-		int retval = select(input_fd + 1, &fd_poll, NULL, NULL, &timeout);
+		int retval = select(input_fd + 1, &poll, NULL, NULL, &timeout);
 		if (retval == -1) {
 			fprintf(stderr,"error on select: %d\n",errno);
 			break;
 		}
 
-		if (!FD_ISSET(input_fd, &fd_poll)) {
+		if (!FD_ISSET(input_fd, &poll)) {
 			fprintf(stderr,"error on FD_ISSET: %d\n",errno);
 			break;
 		}
 
 		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8);
+		int words_read = bytes_read / 8;
 
 		if (!bytes_read) continue; /* wait for next word */
 		if (bytes_read == -1) {
@@ -150,6 +143,8 @@ int main(int argc, unsigned char *argv[]){
 		}
 
 		current_word = inbuf;
+
+
 		printf("bufcounter: %d\n", bufcounter);
 
 		do {
@@ -157,7 +152,7 @@ int main(int argc, unsigned char *argv[]){
 			if (bits_read == 0){
 
 				printf("first word in first buffer\n");
-				t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+				value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 				 
 			} else {
 				unsigned long long rescued = 0;
@@ -170,9 +165,9 @@ int main(int argc, unsigned char *argv[]){
 
 						printf("increase_bitwidth > 0\n");
 
-						t_diff_bitwidth = rescued;
+						bitwidth = rescued;
 
-						t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
 						if (prev_buf_leftover_bitwidth > 0){
 							increase_bitwidth = 0;
@@ -183,12 +178,12 @@ int main(int argc, unsigned char *argv[]){
 
 						printf("increase_bitwidth == 0\n");
 
-						t_diff = rescued;
+						value = rescued;
 					}
 
 				} else {
 
-					t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+					value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
 					if (prev_buf_leftover_bitwidth > 0){
 						increase_bitwidth = 0;
@@ -197,37 +192,45 @@ int main(int argc, unsigned char *argv[]){
 
 				}
 
-				if (t_diff == 0){
+				if (dynamic){
+					if (value == 0){
 
-				// all zeros, meaning we increased bitwidth
-				// printf("increase_bitwidth \n");
+					// all zeros, meaning we increased bitwidth
+					// printf("increase_bitwidth \n");
 
-					t_diff_bitwidth = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, 8, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+						bitwidth = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, 8, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
-					if (prev_buf_leftover_bitwidth > 0){
-						increase_bitwidth = 1;
-						continue;
-					} 
+						if (prev_buf_leftover_bitwidth > 0){
+							increase_bitwidth = 1;
+							continue;
+						} 
 
-					t_diff = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, t_diff_bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
+						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter);
 
-					if (prev_buf_leftover_bitwidth > 0){
-						increase_bitwidth = 0;
-						continue;
+						if (prev_buf_leftover_bitwidth > 0){
+							increase_bitwidth = 0;
+							continue;
+						}
+						
 					}
-					
 				}
 	 
 			} 
-			
-			// we got a t_diff, check if we need to decrease bitwidth
-			ll_to_bin(t_diff);
-			if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
-				t_diff_bitwidth--;
+
+			ll_to_bin(value);
+
+			if (dynamic){
+				// we got a value, check if we need to decrease bitwidth
+				if (value < ((unsigned long long)1 << (bitwidth - 1))){
+					bitwidth--;
+				}
 			}
 
-		} while(prev_buf_leftover_bitwidth == 0);		
-		// } while((bits_read_in_buf + t_diff_bitwidth) < INBUFENTRIES*8*8);		
+
+		} while(
+			(prev_buf_leftover_bitwidth == 0 && dynamic) ||
+			(words_read-- && !dynamic)
+		);		
 
 	}
 

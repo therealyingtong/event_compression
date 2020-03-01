@@ -37,46 +37,46 @@ unsigned long long write_bits_to_buffer(unsigned long long bitstring, unsigned l
 
 }
 
-unsigned long long encode_t_diff(unsigned long long t_diff, unsigned char t_diff_bitwidth, unsigned long long *outbuf2, long *bits_written, unsigned char *sendword, int output_fd2){
+unsigned long long encode_bitstring(unsigned long long bitstring, unsigned char bitwidth, unsigned long long *outbuf, long *bits_written, unsigned char *sendword, int output_fd){
 
-	unsigned long long word = write_bits_to_buffer(t_diff, outbuf2, bits_written, t_diff_bitwidth, sendword);
+	unsigned long long word = write_bits_to_buffer(bitstring, outbuf, bits_written, bitwidth, sendword);
 
 	if (*sendword){
-		ll_to_bin(word);
-		write(output_fd2, &word, 8);
+		// ll_to_bin(word);
+		write(output_fd, &word, 8);
 	} 
 
 	return word;
 
 }
 
-int encode_large_t_diff(unsigned long long t_diff, unsigned char t_diff_bitwidth, unsigned char large_t_diff_bitwidth, unsigned long long *outbuf2, long *bits_written, unsigned char *sendword, int output_fd2){
+int encode_large_bitstring(unsigned long long bitstring, unsigned char bitwidth, unsigned char large_bitwidth, unsigned long long *outbuf, long *bits_written, unsigned char *sendword, int output_fd){
 
-	// write string of zeros of width t_diff_bitwidth
-	unsigned long long word1 = write_bits_to_buffer(0, outbuf2, bits_written, t_diff_bitwidth, sendword);
+	// write string of zeros of width bitwidth
+	unsigned long long word1 = write_bits_to_buffer(0, outbuf, bits_written, bitwidth, sendword);
 
 	if (*sendword){
-		ll_to_bin(word1);
+		// ll_to_bin(word1);
 
-		write(output_fd2, &word1, 8);
+		write(output_fd, &word1, 8);
 	} 
 
-	// write large_t_diff_bitwidth in next byte
-	unsigned long long word2 = write_bits_to_buffer(large_t_diff_bitwidth, outbuf2, bits_written, (unsigned char) 8, sendword);
+	// write large_bitwidth in next byte
+	unsigned long long word2 = write_bits_to_buffer(large_bitwidth, outbuf, bits_written, (unsigned char) 8, sendword);
 
 	if (*sendword){
-		ll_to_bin(word2);
+		// ll_to_bin(word2);
 
-		write(output_fd2, &word2, 8);	
+		write(output_fd, &word2, 8);	
 	} 
 
-	// write t_diff in word of width large_t_diff_bitwidth
-	unsigned long long word3 = write_bits_to_buffer(t_diff, outbuf2, bits_written, large_t_diff_bitwidth, sendword);
+	// write bitstring in word of width large_bitwidth
+	unsigned long long word3 = write_bits_to_buffer(bitstring, outbuf, bits_written, large_bitwidth, sendword);
 
 	if (*sendword){
-		ll_to_bin(word3);
+		// ll_to_bin(word3);
 
-		write(output_fd2, &word3, 8);	
+		write(output_fd, &word3, 8);	
 	} 
 
 }
