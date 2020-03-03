@@ -44,16 +44,20 @@ void encode_bitstring(unsigned long long bitstring, unsigned char bitwidth, unsi
 	unsigned long long first_missing = 1479504229720139841;
 
 	if (*sendword){
-		int write_succeed = write(output_fd, &word, 8);
+		int write_succeed = 9;
+		// int write_succeed = write(output_fd, &word, 8);
 		if (write_succeed < 8){
 			// printf("normal sendword failed to write");
 		} else {
-			ll_to_bin(word);
-			if (word == 1479504229720139841){
-				printf("1479504229720139841 missing\n");
-				write(output_fd, &first_missing, 8);
-			}
 
+			// if (word == 1479504229720139841){
+			// 	// printf("increase sendword1\n");
+			// 	if (write(output_fd, &write_succeed, 9) >= 8) 				ll_to_bin(word);
+				
+			// }
+
+			// ll_to_bin(word);
+			write(output_fd, &word, 8);
 			// printf("normal sendword\n");
 		}
 
@@ -67,13 +71,21 @@ void encode_large_bitstring(unsigned long long bitstring, unsigned char bitwidth
 	unsigned long long word1 = write_bits_to_buffer(0, outbuf, bits_written, bitwidth, sendword);
 
 	if (*sendword){
-		int write_succeed = write(output_fd, &word1, 8);
+		int write_succeed = 9;
+		// int write_succeed = write(output_fd, &word1, 8);
 		if (write_succeed < 8){
-			// printf("increase sendword1 failed to write");
+			printf("increase sendword1 failed to write");
 		} else {
-			ll_to_bin(word1);
-			if (word1 == 1479504229720139841) printf("1479504229720139841 missing");
+
+			// if (word1 == 1479504229720139841){
+			// 	if (write(output_fd, &write_succeed, 7) >= 7) 				ll_to_bin(word1);
+				
+			// }
+
+			// ll_to_bin(word1);
 			// printf("increase sendword1\n");
+			write(output_fd, &word1, 8);
+
 		}
 
 	} 
@@ -81,15 +93,23 @@ void encode_large_bitstring(unsigned long long bitstring, unsigned char bitwidth
 	// write large_bitwidth in next byte
 	unsigned long long word2 = write_bits_to_buffer(large_bitwidth, outbuf, bits_written, (unsigned char) 8, sendword);
 
-	if (*sendword){
-		int write_succeed = write(output_fd, &word2, 8);	
-		if (write_succeed < 8){
-			// printf("increase sendword2 failed to write");
-		} else {
-			ll_to_bin(word2);
-			if (word2 == 1479504229720139841) printf("1479504229720139841 missing");
 
+	if (*sendword){
+		int write_succeed = 9;
+		// int write_succeed = write(output_fd, &word2, 8);
+		if (write_succeed < 8){
+			printf("increase sendword2 failed to write");
+		} else {
+
+			// if (word2 == 1479504229720139841){
+			// 	if (write(output_fd, &write_succeed, 20) >= 8) 				ll_to_bin(word2);
+				
+			// }
+
+			// ll_to_bin(word2);
 			// printf("increase sendword2\n");
+			write(output_fd, &word2, 8);
+
 		}
 
 	} 
@@ -98,14 +118,21 @@ void encode_large_bitstring(unsigned long long bitstring, unsigned char bitwidth
 	unsigned long long word3 = write_bits_to_buffer(bitstring, outbuf, bits_written, large_bitwidth, sendword);
 
 	if (*sendword){
-		int write_succeed = write(output_fd, &word3, 8);	
+		int write_succeed = 9;
+		// int write_succeed = write(output_fd, &word3, 8);
 		if (write_succeed < 8){
-			// printf("increase sendword3 failed to write");
+			printf("increase sendword3 failed to write");
 		} else {
-			ll_to_bin(word3);
-			if (word3 == 1479504229720139841) printf("1479504229720139841 missing");
 
+			// if (word3 == 1479504229720139841){
+			// 	if (write(output_fd, &write_succeed, 32) >= 8) 				ll_to_bin(word3);
+				
+			// }
+
+			// ll_to_bin(word3);
 			// printf("increase sendword3\n");
+			write(output_fd, &word3, 8);
+
 		}
 
 

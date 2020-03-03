@@ -229,7 +229,7 @@ int main(int argc, unsigned char *argv[]){
 			// printf("bitwidths_read_in_buf: %d\n", bitwidths_read_in_buf);
 			if ((long long) value < 0) printf("value < 0");
 
-			// ll_to_bin(value);
+			ll_to_bin(value);
 			write(output_fd, &value, 8);
 
 			if (dynamic){

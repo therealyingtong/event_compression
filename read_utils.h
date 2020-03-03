@@ -43,7 +43,7 @@ unsigned long long read_bits_from_buffer(unsigned long long **current_word, long
 		*bits_read_in_buf = 0;
 		*bits_read = *bits_read + 64 - word_offset;	
 
-		ll_to_bin(**current_word);
+		// ll_to_bin(**current_word);
 
 
 	} else if (word_offset + bitwidth >= 64){
@@ -52,7 +52,7 @@ unsigned long long read_bits_from_buffer(unsigned long long **current_word, long
 
 		unsigned long long first_part_bitstring = read_bits_from_word(**current_word, 64 - word_offset, word_offset);
 
-		ll_to_bin(**current_word);
+		// ll_to_bin(**current_word);
 		unsigned long long second_part_bitstring;
 		(*current_word)++; // read next word
 		second_part_bitstring = read_bits_from_word(**current_word, overlap_bitwidth, 0);

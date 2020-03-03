@@ -192,31 +192,36 @@ int main(int argc, unsigned char *argv[]){
 	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 
-			// ll_to_bin(t_diff);
 
-			if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
+			if ((long long) t_diff >= 0){
+				ll_to_bin(t_diff);
 
-				// if t_diff is too large to contain
-				unsigned char large_t_diff_bitwidth = log2(t_diff) + 1;
+				if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
 
-				encode_large_bitstring(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
+					// if t_diff is too large to contain
+					unsigned char large_t_diff_bitwidth = log2(t_diff) + 1;
 
-				t_diff_bitwidth = large_t_diff_bitwidth;
+					encode_large_bitstring(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
 
-			} else {
-				encode_bitstring(t_diff, t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
-
-				if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
-					// if t_diff can be contained in a smaller bitwidth
-					t_diff_bitwidth--;
+					t_diff_bitwidth = large_t_diff_bitwidth;
 
 				} else {
-					// printf("stay the same\n");
+					encode_bitstring(t_diff, t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
+
+					if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
+						// if t_diff can be contained in a smaller bitwidth
+						t_diff_bitwidth--;
+
+					} else {
+						// printf("stay the same\n");
+					}
 				}
 
 			}
+
 			current_event++;
-		} while(--events_read);	
+
+		} while(--events_read + 1);	
 
 		fflush (stdout);
 	
