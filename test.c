@@ -1,15 +1,7 @@
 #include <stdio.h>
 
-long long read_bits_from_word(long long word, char bitwidth, char start_idx){
-	// assume lsb on left, msb on right
-
-	long long bitmask = ((long long) 1 << bitwidth) - 1; // make bitmask for specified bitwidth
-	char shift = 64 - bitwidth - start_idx;
-	long long shifted_bitmask = bitmask << shift;
-	long long bitstring = (word & shifted_bitmask) >> shift;
-	return bitstring;
-}
-
+unsigned char compressed_file[64] = "./compressed_timestamp";
+int fd;
 
 int ll_to_bin(long long n)
 {
@@ -26,8 +18,11 @@ int ll_to_bin(long long n)
 }
 
 int main(){
-	long long word = ((long long) 1 << 62) - 9;
-	ll_to_bin(word);
-	long long bitstring = read_bits_from_word(word, 10, 0);
-	ll_to_bin(bitstring);
+
+	FILE *fcompressed;
+	unsigned long long word;
+	if ((fcompressed = fopen(compressed_file, "rb")) == NULL) return 0;
+
+	while (fread(&word, sizeof(word), 1, fcompressed) == 1) ll_to_bin(word);
+
 }

@@ -5,3 +5,6 @@ compress: compress.c write_utils.h
 
 decompress: decompress.c read_utils.h
 	gcc -w -O3 -o decompress decompress.c -lm
+
+test: test.c
+	gcc -w -O3 -o test test.c -lm

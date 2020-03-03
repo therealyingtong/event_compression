@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <sys/select.h>
+#include <math.h>
 
 #include "write_utils.h"
 #include "compression_structs.h"
@@ -134,9 +135,12 @@ int main(int argc, unsigned char *argv[]){
 	timestamp_sendword = 0; // bool to indicate whether word is full and should be written to outfile
 	unsigned long long msw, lsw;
 	unsigned long long full_word;
+	unsigned long word_count = 0;
+
+	int EOF_counter = 0;
 
 	// start adding raw events to inbuf
-	while (1) {
+	while (1 && EOF_counter < 10) {
 
 		// wait for data on input_fd
 
@@ -156,7 +160,10 @@ int main(int argc, unsigned char *argv[]){
 
 		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8);
 
-		if (!bytes_read) continue; /* wait for next event */
+		if (!bytes_read) {
+			EOF_counter++;
+			continue; /* wait for next event */
+		}
 		if (bytes_read == -1) {
 			fprintf(stderr,"error on read: %d\n",errno);
 			break;
@@ -166,6 +173,7 @@ int main(int argc, unsigned char *argv[]){
 
 		do {
 			// 0. read one value out of buffer
+			word_count++;
 			
 			msw = current_event->msw; // most significant word
 			lsw = current_event->lsw; // least significant word
@@ -175,6 +183,8 @@ int main(int argc, unsigned char *argv[]){
 
 			detector_value = full_word & detector_bitmask; /* get detector pattern */
 			encode_bitstring(detector_value, detector_bitwidth, outbuf3, &detector_bits_written, &detector_sendword, detector_fd);
+			// printf("wordcount: %d, detector value:\n", word_count);
+			// ll_to_bin(detector_value);
 
 		    t_new = clock_value; /* get event time */
 
@@ -206,8 +216,10 @@ int main(int argc, unsigned char *argv[]){
 
 			}
 			current_event++;
+		} while(--events_read);	
 
-		} while(--events_read);		
+		fflush (stdout);
+	
 	}
 
 	// when inbuf is full, call processor()
@@ -218,6 +230,9 @@ int main(int argc, unsigned char *argv[]){
 		// - set value of current_event to be tmp
 
 			// call processor()
+
+	// printf("\n");
+	// fflush (stdout);
 
 	return 0;
 

@@ -50,7 +50,6 @@ unsigned long long rescue_bits(){
 
 	unsigned long long rescued = (first_part_bitstring << overlap_bitwidth) | second_part_bitstring;
 
-	// bits_read_in_buf = 0;
 	prev_buf_leftover = 0;
 	prev_buf_leftover_bitwidth = 0;
 
@@ -103,19 +102,24 @@ int main(int argc, unsigned char *argv[]){
     fd_set poll;  /* for polling */
 
 	unsigned long long *inbuf; // input buffer pointer
-	inbuf = (unsigned long long *) malloc(inbuf_bytes);
+	inbuf = (unsigned long long *) calloc(inbuf_bytes, 1);
 	if (!inbuf) exit(0);	
 
-	int bytes_read;
+	int bytes_read = 0;
+	int bytes_in_file = findSize(input_file);
+
+	int bitwidths_read_in_buf; // for non-dynamic case
 
 	/* prepare input buffer settings for first read */
-	bytes_read = 0;
 	unsigned char bufcounter = 1;
 
 	unsigned char increase_bitwidth = 0; // flag to indicate if next read is to increase bitwidth (instead of a normal value read)
 
+	int EOF_counter = 0;
+
+
 	// start adding raw words to inbuf
-	while (1) {
+	while (1 && EOF_counter < 10 && bytes_read < bytes_in_file) {
 
 		// wait for data on input_fd
 
@@ -133,10 +137,14 @@ int main(int argc, unsigned char *argv[]){
 			break;
 		}
 
-		bytes_read = read(input_fd, inbuf, INBUFENTRIES*8);
-		int words_read = bytes_read / 8;
+		bytes_read += read(input_fd, inbuf, INBUFENTRIES*8);
+		bitwidths_read_in_buf = INBUFENTRIES*8 * 8 / init_bitwidth; // for non-dynamic case
 
-		if (!bytes_read) continue; /* wait for next word */
+		if (!bytes_read) {
+			EOF_counter++;
+			printf("!bytes_read");
+			continue; /* wait for next event */
+		}
 		if (bytes_read == -1) {
 			fprintf(stderr,"error on read: %d\n",errno);
 			break;
@@ -144,26 +152,27 @@ int main(int argc, unsigned char *argv[]){
 
 		current_word = inbuf;
 
-
-		printf("bufcounter: %d\n", bufcounter);
+		// printf("bufcounter: %d\n", bufcounter);
 
 		do {
 
+			bitwidths_read_in_buf --;
+
 			if (bits_read == 0){
 
-				printf("first word in first buffer\n");
+				// printf("first word in first buffer\n");
 				value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 				 
 			} else {
 				unsigned long long rescued = 0;
 
 				if (prev_buf_leftover_bitwidth > 0){
-					printf("rescuing bits\n");
+					// printf("rescuing bits\n");
 					rescued = rescue_bits();
 
 					if (increase_bitwidth > 0){
 
-						printf("increase_bitwidth > 0\n");
+						// printf("increase_bitwidth > 0\n");
 
 						bitwidth = rescued;
 
@@ -176,7 +185,7 @@ int main(int argc, unsigned char *argv[]){
 		
 					} else if (increase_bitwidth == 0) {
 
-						printf("increase_bitwidth == 0\n");
+						// printf("increase_bitwidth == 0\n");
 
 						value = rescued;
 					}
@@ -217,7 +226,10 @@ int main(int argc, unsigned char *argv[]){
 	 
 			} 
 
-			ll_to_bin(value);
+			// printf("bitwidths_read_in_buf: %d\n", bitwidths_read_in_buf);
+			if ((long long) value < 0) printf("value < 0");
+
+			// ll_to_bin(value);
 			write(output_fd, &value, 8);
 
 			if (dynamic){
@@ -227,12 +239,13 @@ int main(int argc, unsigned char *argv[]){
 				}
 			}
 
-
 		} while(
-			(prev_buf_leftover_bitwidth == 0 && dynamic) ||
-			(words_read-- && !dynamic)
-		);		
+			(prev_buf_leftover_bitwidth == 0 && dynamic &&  bits_read <= bytes_in_file*8) ||
+			(bitwidths_read_in_buf - 1 && !dynamic)
+		);	
 
+		fflush (stdout);	
+	
 	}
 
 	// when inbuf is full, call processor()
@@ -243,6 +256,9 @@ int main(int argc, unsigned char *argv[]){
 		// - set value of current_word to be tmp
 
 			// call processor()
+
+	// printf("\n");
+	// fflush (stdout);
 
 	return 0;
 
