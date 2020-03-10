@@ -1,6 +1,8 @@
 #include <stdio.h>
 
-unsigned char compressed_file[64] = "./compressed_detector";
+unsigned char compressed_file[64] = "./recombined";
+// unsigned char compressed_file[64] = "../event_generation/data/alice_100_50.bin";
+
 int fd;
 
 int ll_to_bin(long long n)

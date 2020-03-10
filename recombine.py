@@ -1,5 +1,6 @@
 import sys
 import numpy as np 
+from bitstring import BitArray
 
 # parameters
 decompressed_timestamp_file = sys.argv[1]
@@ -44,4 +45,13 @@ with open(recombined_file, 'wb') as file:
 		recombined_word = shifted_timestamp | (detectors[i])
 		# print("recombined_word: ", recombined_word)
 
-		file.write(int(recombined_word).to_bytes(8, byteorder='big', signed=False))
+		byte_array = int(recombined_word).to_bytes(8, byteorder='little', signed=False)
+		rearranged_byte_array = byte_array[4:8] + byte_array[0:4]
+
+
+		file.write(rearranged_byte_array)
+
+		# print(i)
+		# # print(byte_array)
+		# print(bin(int.from_bytes(rearranged_byte_array, byteorder='big', signed=False)) )
+

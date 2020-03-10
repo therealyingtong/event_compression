@@ -1,3 +1,13 @@
+## usage and testing
+
+to test, run:
+
+`make`
+
+`python3 test.py ./alice_100_50.bin `
+
+## documentation
+
 the timestamp event is encoded in a 64-bit word. we can specify the number of bits `clock_bitwidth` for the clock value and `detector_bitwidth` for the detector bitmask. the remaining bits in between are left uninitialised as random values.
 
 the encoder and decoder agree beforehand on the parameters `clock_bitwidth` and `detector_bitwidth`. in the following illustration, we initialise:

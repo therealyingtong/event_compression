@@ -52,6 +52,7 @@ test_helper.decompress(compressed_detector_file, decompressed_detector_file, det
 test_helper.recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file, str(num_events))
 
 # recombined file checksum
+print("original file checksum:   ", test_helper.md5sum(readevent_file))
 print("recombined file checksum: ", test_helper.md5sum(recombined_file))
 
 # 3. test
