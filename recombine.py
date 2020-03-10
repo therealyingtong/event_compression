@@ -11,6 +11,8 @@ recombined_file = sys.argv[5]
 # process timestamps
 decompressed_timestamp = open(decompressed_timestamp_file, "r")
 time_diffs = np.fromfile(decompressed_timestamp, dtype=np.uint64)
+time_diffs = time_diffs[0: len(time_diffs) - 2] # ignore last time_diff
+
 timestamps = np.empty(len(time_diffs))
 
 timestamps[0] = time_diffs[0] # first timestamp
@@ -21,7 +23,7 @@ for i in range(1, len(time_diffs)):
 # process detectors
 decompressed_detectors = open(decompressed_detector_file, "r")
 detectors = np.fromfile(decompressed_detectors, dtype=np.uint64)
-print(detectors[0:100])
+print("detectors[0:100]", detectors[0:100])
 
 # combine timestamps and detectors
 combined_words = np.empty(len(time_diffs))

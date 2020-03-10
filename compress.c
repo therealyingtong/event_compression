@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <sys/select.h>
 #include <math.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "write_utils.h"
 #include "compression_structs.h"
@@ -108,7 +110,7 @@ int main(int argc, unsigned char *argv[]){
     fd_set fd_poll;  /* for polling */
 
 	struct raw_event *inbuf; // input buffer pointer
-	inbuf = (struct raw_event *) malloc(inbuf_bytes);
+	inbuf = (struct raw_event *) calloc(inbuf_bytes, sizeof(struct raw_event));
 	if (!inbuf) exit(0);
 	struct raw_event *current_event;
 
@@ -135,9 +137,12 @@ int main(int argc, unsigned char *argv[]){
 	timestamp_sendword = 0; // bool to indicate whether word is full and should be written to outfile
 	unsigned long long msw, lsw;
 	unsigned long long full_word;
-	unsigned long word_count = 0;
 
+	struct stat buf;
+	fstat(input_fd, &buf);
+	off_t num_events = buf.st_size / 8;
 	int EOF_counter = 0;
+	int total_events_read = 0;
 
 	// start adding raw events to inbuf
 	while (1 && EOF_counter < 10) {
@@ -168,12 +173,15 @@ int main(int argc, unsigned char *argv[]){
 			fprintf(stderr,"error on read: %d\n",errno);
 			break;
 		}
+		// events_read = bytes_read/8; // each event is 64 bits aka 8 bytes
 		events_read = bytes_read/8; // each event is 64 bits aka 8 bytes
+
 		current_event = inbuf;
 
 		do {
+
+			total_events_read++;
 			// 0. read one value out of buffer
-			word_count++;
 			
 			msw = current_event->msw; // most significant word
 			lsw = current_event->lsw; // least significant word
@@ -182,9 +190,6 @@ int main(int argc, unsigned char *argv[]){
 			clock_value = (full_word & clock_bitmask) >> (64 - clock_bitwidth);
 
 			detector_value = full_word & detector_bitmask; /* get detector pattern */
-			encode_bitstring(detector_value, detector_bitwidth, outbuf3, &detector_bits_written, &detector_sendword, detector_fd);
-			// printf("wordcount: %d, detector value:\n", word_count);
-			// ll_to_bin(detector_value);
 
 		    t_new = clock_value; /* get event time */
 
@@ -192,25 +197,28 @@ int main(int argc, unsigned char *argv[]){
 	    	t_diff = t_new - t_old; /* time difference */
 			t_old = t_new;
 
-
 			if ((long long) t_diff >= 0){
 				ll_to_bin(t_diff);
+
+				// ll_to_bin(detector_value);
+				encode_bitstring(detector_value, detector_bitwidth, outbuf3, &detector_bits_written, &detector_sendword, detector_fd, total_events_read, num_events);
 
 				if (t_diff + 1 > ((unsigned long long) 1 << t_diff_bitwidth)){
 
 					// if t_diff is too large to contain
 					unsigned char large_t_diff_bitwidth = log2(t_diff) + 1;
 
-					encode_large_bitstring(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
+					encode_large_bitstring(t_diff, t_diff_bitwidth, large_t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd, total_events_read, num_events);
 
 					t_diff_bitwidth = large_t_diff_bitwidth;
 
 				} else {
-					encode_bitstring(t_diff, t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd);
+					encode_bitstring(t_diff, t_diff_bitwidth, outbuf2, &timestamp_bits_written, &timestamp_sendword, timestamp_fd, total_events_read, num_events);
 
-					if (t_diff < ((unsigned long long)1 << (t_diff_bitwidth - 1))){
+					if (t_diff < ((unsigned long long) 1 << (t_diff_bitwidth - 1))){
 						// if t_diff can be contained in a smaller bitwidth
 						t_diff_bitwidth--;
+						// printf("t_diff_bitwidth--;");
 
 					} else {
 						// printf("stay the same\n");
@@ -221,9 +229,10 @@ int main(int argc, unsigned char *argv[]){
 
 			current_event++;
 
-		} while(--events_read + 1);	
+		} while(--events_read);	
+		// } while(--events_read + 1);	
 
-		fflush (stdout);
+		// fflush (stdout);
 	
 	}
 

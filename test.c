@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-unsigned char compressed_file[64] = "./compressed_timestamp";
+unsigned char compressed_file[64] = "./compressed_detector";
 int fd;
 
 int ll_to_bin(long long n)

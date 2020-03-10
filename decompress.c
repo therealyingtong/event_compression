@@ -21,7 +21,7 @@ OPTIONS:
 	-o output_file: file to write decompressed words to
 	-b init_bitwidth: initial number of bits used to represent a value
 	-p protocol: string indicating protocol to be used
-	-d dynamic: boolean indicating whether or not to change init_bitwidth
+	-a adaptive: boolean indicating whether or not to change init_bitwidth
 
 */
 
@@ -36,7 +36,7 @@ unsigned char bufcounter = 1; // counter tracks which buffer we're reading from
 unsigned long long value;
 
 int protocol_idx = 1;
-char dynamic = 0;
+char adaptive = 0;
 int inbuf_bytes = INBUFENTRIES * 8; // number of bytes to allocate to input buffer
 int inbuf_bits = INBUFENTRIES * 8 * 8;
 long bits_read = 0; // counter for bits read 
@@ -63,7 +63,7 @@ int main(int argc, unsigned char *argv[]){
 
 	// parse options
 	int opt;
-	while((opt = getopt(argc, argv, "i:o:b:p:d")) != EOF){
+	while((opt = getopt(argc, argv, "i:o:b:p:a")) != EOF){
 		switch(opt){
 		case 'i':
 			sscanf(optarg, FNAMEFORMAT, input_file);
@@ -89,8 +89,8 @@ int main(int argc, unsigned char *argv[]){
 			} 
 			break;
 
-		case 'd':
-			dynamic = 1;
+		case 'a':
+			adaptive = 1;
 			break;
 		}
 	}
@@ -108,7 +108,7 @@ int main(int argc, unsigned char *argv[]){
 	int bytes_read = 0;
 	int bytes_in_file = findSize(input_file);
 
-	int bitwidths_read_in_buf; // for non-dynamic case
+	int bitwidths_read_in_buf; // for non-adaptive case
 
 	/* prepare input buffer settings for first read */
 	unsigned char bufcounter = 1;
@@ -138,7 +138,6 @@ int main(int argc, unsigned char *argv[]){
 		}
 
 		bytes_read += read(input_fd, inbuf, INBUFENTRIES*8);
-		bitwidths_read_in_buf = INBUFENTRIES*8 * 8 / init_bitwidth; // for non-dynamic case
 
 		if (!bytes_read) {
 			EOF_counter++;
@@ -155,8 +154,6 @@ int main(int argc, unsigned char *argv[]){
 		// printf("bufcounter: %d\n", bufcounter);
 
 		do {
-
-			bitwidths_read_in_buf --;
 
 			if (bits_read == 0){
 
@@ -201,7 +198,7 @@ int main(int argc, unsigned char *argv[]){
 
 				}
 
-				if (dynamic){
+				if (adaptive){
 					if (value == 0){
 
 					// all zeros, meaning we increased bitwidth
@@ -226,13 +223,12 @@ int main(int argc, unsigned char *argv[]){
 	 
 			} 
 
-			// printf("bitwidths_read_in_buf: %d\n", bitwidths_read_in_buf);
 			if ((long long) value < 0) printf("value < 0");
 
 			ll_to_bin(value);
 			write(output_fd, &value, 8);
 
-			if (dynamic){
+			if (adaptive){
 				// we got a value, check if we need to decrease bitwidth
 				if (value < ((unsigned long long)1 << (bitwidth - 1))){
 					bitwidth--;
@@ -240,8 +236,8 @@ int main(int argc, unsigned char *argv[]){
 			}
 
 		} while(
-			(prev_buf_leftover_bitwidth == 0 && dynamic &&  bits_read <= bytes_in_file*8) ||
-			(bitwidths_read_in_buf - 1 && !dynamic)
+			(prev_buf_leftover_bitwidth == 0 && adaptive &&  bits_read < bytes_in_file*8) ||		
+			(!adaptive && bits_read <= bytes_in_file*8)
 		);	
 
 		fflush (stdout);	

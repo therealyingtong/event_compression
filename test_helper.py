@@ -42,10 +42,10 @@ def compress(readevent_file, compressed_timestamp_file, compressed_detector_file
     compress_command = "./compress -i " + readevent_file + " -o " + compressed_timestamp_file + " -O " + compressed_detector_file + " -c " + clock_bitwidth + " -d " + detector_bitwidth + " -p " + protocol
     run_sub_process(compress_command)
 
-def decompress(compressed_file, decompressed_file, init_bitwidth, protocol, dynamic):
+def decompress(compressed_file, decompressed_file, init_bitwidth, protocol, adaptive):
 	log("\n decompressing " + compressed_file)
 	decompress_command = "./decompress -i " + compressed_file + " -o " + decompressed_file + " -b " + init_bitwidth + " -p " + protocol
-	if (dynamic): decompress_command += " -d "
+	if (adaptive): decompress_command += " -a "
 	run_sub_process(decompress_command)
 
 def recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file):
