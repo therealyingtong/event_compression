@@ -7,12 +7,12 @@ decompressed_detector_file = sys.argv[2]
 clock_bitwidth = sys.argv[3]
 detector_bitwidth = sys.argv[4]
 recombined_file = sys.argv[5]
+num_events = int(sys.argv[6])
 
 # process timestamps
 decompressed_timestamp = open(decompressed_timestamp_file, "r")
 time_diffs = np.fromfile(decompressed_timestamp, dtype=np.uint64)
-time_diffs = time_diffs[0: len(time_diffs) - 2] # ignore last time_diff
-
+time_diffs = time_diffs[0 : num_events] 
 timestamps = np.empty(len(time_diffs))
 
 timestamps[0] = time_diffs[0] # first timestamp
@@ -23,7 +23,7 @@ for i in range(1, len(time_diffs)):
 # process detectors
 decompressed_detectors = open(decompressed_detector_file, "r")
 detectors = np.fromfile(decompressed_detectors, dtype=np.uint64)
-print("detectors[0:100]", detectors[0:100])
+detectors = detectors[0 : num_events]
 
 # combine timestamps and detectors
 combined_words = np.empty(len(time_diffs))
@@ -34,11 +34,14 @@ with open(recombined_file, 'wb') as file:
 
 	for i in range(0, len(combined_words)):
 		# shift timestamps[i] left by (64 - clock_bitwidth) bits
-		shifted_timestamp = (timestamps[i]) << (64 - int(clock_bitwidth))
+		# print("timestamp before shift: ", timestamps[i])
+		shifted_timestamp = np.uint64(timestamps[i]) << np.uint64(64 - int(clock_bitwidth))
+		# print("timestamp after shift: ", shifted_timestamp)
 
 		# no need to shift detectors[i] since they will be lsb
 
 		# OR timestamps[i] and detectors[i]
 		recombined_word = shifted_timestamp | (detectors[i])
+		# print("recombined_word: ", recombined_word)
 
 		file.write(int(recombined_word).to_bytes(8, byteorder='big', signed=False))

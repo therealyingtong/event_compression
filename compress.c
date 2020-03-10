@@ -198,7 +198,7 @@ int main(int argc, unsigned char *argv[]){
 			t_old = t_new;
 
 			if ((long long) t_diff >= 0){
-				ll_to_bin(t_diff);
+				// ll_to_bin(t_diff);
 
 				// ll_to_bin(detector_value);
 				encode_bitstring(detector_value, detector_bitwidth, outbuf3, &detector_bits_written, &detector_sendword, detector_fd, total_events_read, num_events);

@@ -48,7 +48,7 @@ def decompress(compressed_file, decompressed_file, init_bitwidth, protocol, adap
 	if (adaptive): decompress_command += " -a "
 	run_sub_process(decompress_command)
 
-def recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file):
+def recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file, num_events):
 	log("\n recombining " + decompressed_timestamp_file + " and " + decompressed_detector_file)
-	recombine_command = "python3 recombine.py " + decompressed_timestamp_file + " " + decompressed_detector_file + " " + clock_bitwidth + " " + detector_bitwidth + " " + recombined_file
+	recombine_command = "python3 recombine.py " + decompressed_timestamp_file + " " + decompressed_detector_file + " " + clock_bitwidth + " " + detector_bitwidth + " " + recombined_file + " " + num_events
 	run_sub_process(recombine_command)

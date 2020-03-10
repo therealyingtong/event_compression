@@ -23,6 +23,7 @@ print("original file checksum: ", test_helper.md5sum(readevent_file))
 
 original_file_size = test_helper.get_file_size(readevent_file)
 print("original file size (in bytes): ", original_file_size)
+num_events = int(original_file_size / 8)
 
 # execution time
 test_helper.compress(readevent_file, compressed_timestamp_file, compressed_detector_file, clock_bitwidth, detector_bitwidth, protocol)
@@ -48,7 +49,7 @@ test_helper.decompress(compressed_timestamp_file, decompressed_timestamp_file, c
 test_helper.decompress(compressed_detector_file, decompressed_detector_file, detector_bitwidth, protocol, 0)
 
 # recombine decompressed timestamp and detector
-test_helper.recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file)
+test_helper.recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file, str(num_events))
 
 # recombined file checksum
 print("recombined file checksum: ", test_helper.md5sum(recombined_file))
