@@ -21,7 +21,7 @@ def log(s, printlog = True):
 		log_file.write(str(s)+'\n')
 		log_file.flush()
 
-def run_sub_process(command, timelimit = 5):
+def run_sub_process(command, timelimit = 120):
 	log("\n running:"+ command + "\n ")
 
 	# process = subprocess.Popen([command], shell=True)

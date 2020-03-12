@@ -1,5 +1,6 @@
 import test_helper
 import sys
+import os
 
 # parameters
 compressed_timestamp_file = "./compressed_timestamp"
@@ -7,6 +8,10 @@ compressed_detector_file = "./compressed_detector"
 decompressed_timestamp_file = "./decompressed_timestamp"
 decompressed_detector_file = "./decompressed_detector"
 recombined_file = "./recombined"
+
+if not os.path.exists(recombined_file):
+    os.mknod(recombined_file)
+
 
 readevent_file = sys.argv[1]
 

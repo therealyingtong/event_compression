@@ -103,7 +103,10 @@ int main(int argc, unsigned char *argv[]){
 
 	unsigned long long *inbuf; // input buffer pointer
 	inbuf = (unsigned long long *) calloc(inbuf_bytes, 1);
-	if (!inbuf) exit(0);	
+	if (!inbuf){
+		printf("!inbuf");
+		exit(0);
+	} 	
 
 	int bytes_read = 0;
 	int bytes_in_file = findSize(input_file);
@@ -150,8 +153,13 @@ int main(int argc, unsigned char *argv[]){
 		}
 
 		current_word = inbuf;
+		int old_bufcounter = bufcounter;
 
 		// printf("bufcounter: %d\n", bufcounter);
+		// printf("bytes in file: %d\n", bytes_in_file);
+		// printf("bytes read: %d\n", bytes_read);
+		// printf("bits_read_in_buf: %d\n", bits_read_in_buf);
+
 
 		do {
 
@@ -223,21 +231,18 @@ int main(int argc, unsigned char *argv[]){
 	 
 			} 
 
-			if ((long long) value < 0) printf("value < 0");
-
-			// ll_to_bin(value);
-			write(output_fd, &value, 8);
+			if ((long long) value > 0) write(output_fd, &value, 8);
 
 			if (adaptive){
 				// we got a value, check if we need to decrease bitwidth
-				if (value < ((unsigned long long)1 << (bitwidth - 1))){
+				if (value < ((unsigned long long) 1 << (bitwidth - 1))){
 					bitwidth--;
 				}
 			}
 
 		} while(
 			(prev_buf_leftover_bitwidth == 0 && adaptive &&  bits_read < bytes_in_file*8) ||		
-			(!adaptive && bits_read <= bytes_in_file*8)
+			(old_bufcounter == bufcounter && !adaptive && bits_read < bytes_in_file*8)
 		);	
 
 		fflush (stdout);	

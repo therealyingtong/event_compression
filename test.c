@@ -1,7 +1,9 @@
 #include <stdio.h>
 
-unsigned char compressed_file[64] = "./recombined";
-// unsigned char compressed_file[64] = "../event_generation/data/alice_100_50.bin";
+// unsigned char compressed_file[64] = "./recombined";
+// unsigned char compressed_file[64] = "./alice_20190405_1";
+unsigned char compressed_file[64] = "./decompressed_detector";
+// unsigned char compressed_file[64] = "./compressed_detector";
 
 int fd;
 

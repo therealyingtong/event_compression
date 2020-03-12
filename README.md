@@ -4,7 +4,7 @@ to test, run:
 
 `make`
 
-`python3 test.py ./alice_100_50.bin `
+`python3 test.py ./alice_20190405_1 `
 
 ## documentation
 
