@@ -15,8 +15,11 @@ if not os.path.exists(recombined_file):
 
 readevent_file = sys.argv[1]
 
-clock_bitwidth = "49"
+clock_bitwidth = "45"
+# clock_bitwidth = "49"
+
 detector_bitwidth = "4"
+expected_bitwidth = "14"
 protocol = "1"
 
 # 0. run raw data through readevents to get file
@@ -31,7 +34,7 @@ print("original file size (in bytes): ", original_file_size)
 num_events = int(original_file_size / 8)
 
 # execution time
-test_helper.compress(readevent_file, compressed_timestamp_file, compressed_detector_file, clock_bitwidth, detector_bitwidth, protocol)
+test_helper.compress(readevent_file, compressed_timestamp_file, compressed_detector_file, clock_bitwidth, detector_bitwidth, expected_bitwidth, protocol)
 
 compressed_timestamp_file_size = test_helper.get_file_size(compressed_timestamp_file)
 print("compressed timestamp file size (in bytes): ", compressed_timestamp_file_size)
@@ -48,10 +51,10 @@ print("compression ratio: ", original_file_size / compressed_file_size)
 
 # 2. decompress file
 # decompress timestamp differences
-test_helper.decompress(compressed_timestamp_file, decompressed_timestamp_file, clock_bitwidth, protocol, 1)
+test_helper.decompress(compressed_timestamp_file, decompressed_timestamp_file, clock_bitwidth, expected_bitwidth, protocol, 1)
 
 # decompress detector
-test_helper.decompress(compressed_detector_file, decompressed_detector_file, detector_bitwidth, protocol, 0)
+test_helper.decompress(compressed_detector_file, decompressed_detector_file, detector_bitwidth, detector_bitwidth, protocol, 0)
 
 # recombine decompressed timestamp and detector
 test_helper.recombine(decompressed_timestamp_file, decompressed_detector_file, clock_bitwidth, detector_bitwidth, recombined_file, str(num_events))

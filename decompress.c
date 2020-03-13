@@ -60,10 +60,11 @@ int main(int argc, unsigned char *argv[]){
 
 	unsigned char input_file[FNAMELENGTH] = "";
 	unsigned char init_bitwidth; // width (in bits) of init value
+	unsigned char expected_bitwidth; // expected bitwidth for t_diff
 
 	// parse options
 	int opt;
-	while((opt = getopt(argc, argv, "i:o:b:p:a")) != EOF){
+	while((opt = getopt(argc, argv, "i:o:b:e:p:a")) != EOF){
 		switch(opt){
 		case 'i':
 			sscanf(optarg, FNAMEFORMAT, input_file);
@@ -80,6 +81,12 @@ int main(int argc, unsigned char *argv[]){
 		case 'b':
 			if (sscanf(optarg, "%d", &init_bitwidth) != 1){
 				fprintf(stderr, "init_bitwidth sscanf: %s\n", strerror(errno));
+			} 
+			break;
+
+		case 'e':
+			if (sscanf(optarg, "%d", &expected_bitwidth) != 1){
+				fprintf(stderr, "expected_bitwidth sscanf: %s\n", strerror(errno));
 			} 
 			break;
 
@@ -181,6 +188,9 @@ int main(int argc, unsigned char *argv[]){
 
 						bitwidth = rescued;
 
+						// printf("bitwidth: %d\n", bitwidth);
+
+
 						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 
 						if (prev_buf_leftover_bitwidth > 0){
@@ -217,7 +227,9 @@ int main(int argc, unsigned char *argv[]){
 						if (prev_buf_leftover_bitwidth > 0){
 							increase_bitwidth = 1;
 							continue;
-						} 
+						} else {
+							// printf("bitwidth: %d\n", bitwidth);
+						}
 
 						value = read_bits_from_buffer(&current_word, &bits_read, &bits_read_in_buf, bitwidth, &prev_buf_leftover_bitwidth, &overlap_bitwidth, &prev_buf_leftover, &bufcounter, inbuf_bits);
 
@@ -236,9 +248,15 @@ int main(int argc, unsigned char *argv[]){
 			if (adaptive){
 				// we got a value, check if we need to decrease bitwidth
 				if (value < ((unsigned long long) 1 << (bitwidth - 1))){
+					if (bitwidth > expected_bitwidth) 
 					bitwidth--;
 				}
+
+				// printf("bitwidth: %d\n", bitwidth);
+
 			}
+
+
 
 		} while(
 			(prev_buf_leftover_bitwidth == 0 && adaptive &&  bits_read < bytes_in_file*8) ||		

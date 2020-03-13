@@ -2,8 +2,9 @@
 
 // unsigned char compressed_file[64] = "./recombined";
 // unsigned char compressed_file[64] = "./alice_20190405_1";
-unsigned char compressed_file[64] = "./decompressed_detector";
+// unsigned char compressed_file[64] = "./decompressed_timestamp";
 // unsigned char compressed_file[64] = "./compressed_detector";
+unsigned char compressed_file[64] = "./compressed_timestamp";
 
 int fd;
 

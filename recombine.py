@@ -14,6 +14,7 @@ num_events = int(sys.argv[6])
 decompressed_timestamp = open(decompressed_timestamp_file, "r")
 time_diffs = np.fromfile(decompressed_timestamp, dtype=np.uint64)
 time_diffs = time_diffs[0 : num_events] 
+
 timestamps = np.empty(len(time_diffs))
 
 timestamps[0] = time_diffs[0] # first timestamp
@@ -37,7 +38,7 @@ with open(recombined_file, 'wb') as file:
 		# shift timestamps[i] left by (64 - clock_bitwidth) bits
 		# print("timestamp before shift: ", timestamps[i])
 		shifted_timestamp = np.uint64(timestamps[i]) << np.uint64(64 - int(clock_bitwidth))
-		# print("timestamp after shift: ", shifted_timestamp)
+		# print("timestamp after shift: ", shifted_timestamp)			
 
 		# no need to shift detectors[i] since they will be lsb
 

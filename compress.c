@@ -24,6 +24,7 @@ OPTIONS:
 	-O detector_file: file to write detector patterns to
 	-c clock_bitwidth: number of bits used to represent a timestamp
 	-d detector_bitwidth: number of bits used to represent a detector
+	-e expected_bitwidth: number of bits expected for t_diff
 	-p protocol: string indicating protocol to be used
 
 */
@@ -47,13 +48,14 @@ unsigned long long t_new, t_old; // for consistency checks
 int main(int argc, unsigned char *argv[]){
 
 	unsigned char clock_bitwidth, detector_bitwidth; // width (in bits) of clock value and detector value
+	unsigned char expected_bitwidth; // expected bitwidth for t_diff
 
 	unsigned char input_file[FNAMELENGTH] = "";
 	int *type2patterntable, *type3patterntable; /* for protocol */
 
 	// parse options
 	int opt;
-	while((opt = getopt(argc, argv, "i:o:O:c:d:p:")) != EOF){
+	while((opt = getopt(argc, argv, "i:o:O:c:d:e:p:")) != EOF){
 		switch(opt){
 		case 'i':
 			sscanf(optarg, FNAMEFORMAT, input_file);
@@ -82,6 +84,12 @@ int main(int argc, unsigned char *argv[]){
 		case 'd':
 			if (sscanf(optarg, "%d", &detector_bitwidth) != 1){
 				fprintf(stderr, "detector_bitwidth sscanf: %s\n", strerror(errno));
+			} 
+			break;
+
+		case 'e':
+			if (sscanf(optarg, "%d", &expected_bitwidth) != 1){
+				fprintf(stderr, "expected_bitwidth sscanf: %s\n", strerror(errno));
 			} 
 			break;
 
@@ -217,25 +225,29 @@ int main(int argc, unsigned char *argv[]){
 
 					if (t_diff < ((unsigned long long) 1 << (t_diff_bitwidth - 1))){
 						// if t_diff can be contained in a smaller bitwidth
+						if (t_diff_bitwidth > expected_bitwidth) 
 						t_diff_bitwidth--;
-						// printf("t_diff_bitwidth--;");
 
 					} else {
 						// printf("stay the same\n");
 					}
 				}
 
+				// printf("t_diff_bitwidth: %d\n", t_diff_bitwidth);
+
 			}
 
 			current_event++;
 
 		} while(--events_read);	
-		// } while(--events_read + 1);	
 
 		// fflush (stdout);
 	
 	}
 
+	write(timestamp_fd, outbuf2, 8);
+	write(detector_fd, outbuf3, 8);
+	
 	// when inbuf is full, call processor()
 
 		// when done processing inbuf:

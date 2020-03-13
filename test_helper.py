@@ -37,14 +37,14 @@ def run_sub_process(command, timelimit = 120):
 		# outs, errs = process.communicate()
 	log("\n Done \n ")
 
-def compress(readevent_file, compressed_timestamp_file, compressed_detector_file, clock_bitwidth, detector_bitwidth, protocol):
+def compress(readevent_file, compressed_timestamp_file, compressed_detector_file, clock_bitwidth, detector_bitwidth, expected_bitwidth, protocol):
     log("\n compressing " + readevent_file)
-    compress_command = "./compress -i " + readevent_file + " -o " + compressed_timestamp_file + " -O " + compressed_detector_file + " -c " + clock_bitwidth + " -d " + detector_bitwidth + " -p " + protocol
+    compress_command = "./compress -i " + readevent_file + " -o " + compressed_timestamp_file + " -O " + compressed_detector_file + " -c " + clock_bitwidth + " -d " + detector_bitwidth + " -e " + expected_bitwidth + " -p " + protocol
     run_sub_process(compress_command)
 
-def decompress(compressed_file, decompressed_file, init_bitwidth, protocol, adaptive):
+def decompress(compressed_file, decompressed_file, init_bitwidth, expected_bitwidth, protocol, adaptive):
 	log("\n decompressing " + compressed_file)
-	decompress_command = "./decompress -i " + compressed_file + " -o " + decompressed_file + " -b " + init_bitwidth + " -p " + protocol
+	decompress_command = "./decompress -i " + compressed_file + " -o " + decompressed_file + " -b " + init_bitwidth + " -e " + expected_bitwidth + " -p "  + protocol
 	if (adaptive): decompress_command += " -a "
 	run_sub_process(decompress_command)
 
